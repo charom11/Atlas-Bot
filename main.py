@@ -1145,10 +1145,14 @@ def check_portfolio_risk_capacity(balance, new_margin_usdt, max_portfolio_margin
     🔒 Maximum Concurrent Portfolio Exposure Cap:
     - Strictly limits total margin committed across ALL active positions to max 6.0% of wallet.
     - On a $14.20 wallet, total combined margin cannot exceed $0.85.
+    - Fails CLOSED if positions or balance cannot be reliably determined.
     """
     try:
         if positions is None:
             positions = get_binance_futures_positions()
+        if positions is None:
+            return False, "Portfolio risk check failed: position data unavailable from Binance (Fail Closed)"
+
         total_current_margin = 0.0
         for p in positions:
             notional = abs(float(p.get('notional', 0.0)))
@@ -1159,8 +1163,8 @@ def check_portfolio_risk_capacity(balance, new_margin_usdt, max_portfolio_margin
         if (total_current_margin + new_margin_usdt) > max_allowed_margin:
             return False, f"Portfolio Exposure Cap Reached (${total_current_margin + new_margin_usdt:.2f} > ${max_allowed_margin:.2f})"
         return True, "Capacity OK"
-    except Exception:
-        return True, "Capacity OK"
+    except Exception as e:
+        return False, f"Portfolio Capacity check error: {e} (Fail Closed)"
 
 # --------------------------------------------------------------------------
 # Binance Futures Authenticated API Helper (`fapi.binance.com`)
@@ -1314,10 +1318,10 @@ def get_binance_futures_usdt_balance(mode='wallet'):
     return 0.0
 
 def get_binance_futures_positions():
-    """Returns list of active open positions on Binance Futures"""
+    """Returns list of active open positions on Binance Futures, or None on API error/timeout."""
     positions = binance_futures_signed_request('GET', '/fapi/v2/positionRisk')
-    if not positions or not isinstance(positions, list):
-        return []
+    if positions is None or not isinstance(positions, list):
+        return None
     active = []
     for p in positions:
         amt = float(p.get('positionAmt', 0.0))
@@ -1336,7 +1340,55 @@ def get_binance_futures_positions():
     return active
 
 def get_binance_futures_open_positions_count():
-    return len(get_binance_futures_positions())
+    pos = get_binance_futures_positions()
+    return len(pos) if pos is not None else 0
+
+def cancel_existing_protective_stops(symbol, position_side=None):
+    """
+    Authoritatively queries Binance and cancels ALL existing conditional/stop orders
+    for this symbol in the position direction before placing a new stop.
+    Eliminates Binance -4130 (duplicate closePosition order) completely.
+    """
+    cancelled_count = 0
+    try:
+        # 1. Authoritatively check Algo Orders
+        open_algo = binance_futures_signed_request('GET', '/fapi/v1/openAlgoOrders', {'symbol': symbol})
+        if isinstance(open_algo, list):
+            for a in open_algo:
+                if a.get('symbol') != symbol:
+                    continue
+                o_type = a.get('orderType', '')
+                p_side = a.get('positionSide', '')
+                is_stop = o_type in ['STOP_MARKET', 'STOP'] or a.get('closePosition', False)
+                side_matches = (position_side is None) or (p_side == position_side)
+                if is_stop and side_matches:
+                    algo_id = a.get('algoId')
+                    if algo_id:
+                        res = binance_futures_signed_request('DELETE', '/fapi/v1/algoOrder', {'algoId': int(algo_id)})
+                        cancelled_count += 1
+                        print(f"[STOP RECONCILE] Cancelled existing Algo stop #{algo_id} on {symbol} ({p_side})", flush=True)
+
+        # 2. Regular Orders check (for any non-algo STOP_MARKET)
+        open_reg = binance_futures_signed_request('GET', '/fapi/v1/openOrders', {'symbol': symbol})
+        if isinstance(open_reg, list):
+            for o in open_reg:
+                if o.get('symbol') != symbol:
+                    continue
+                o_type = o.get('type', '')
+                p_side = o.get('positionSide', '')
+                side_matches = (position_side is None) or (p_side == position_side)
+                if o_type in ['STOP_MARKET', 'STOP'] and side_matches:
+                    oid = o.get('orderId')
+                    if oid:
+                        binance_futures_signed_request('DELETE', '/fapi/v1/order', {'symbol': symbol, 'orderId': oid})
+                        cancelled_count += 1
+                        print(f"[STOP RECONCILE] Cancelled existing regular stop #{oid} on {symbol} ({p_side})", flush=True)
+    except Exception as e:
+        print(f"[STOP RECONCILE WARN] {symbol} error querying open stops: {e}", flush=True)
+
+    if cancelled_count > 0:
+        time.sleep(0.12)  # Brief pause for Binance engine to settle cancellation
+    return cancelled_count
 
 def cancel_binance_symbol_all_orders(symbol):
     """
@@ -1400,9 +1452,13 @@ def place_protective_stop(symbol, close_side, position_side, qty, stop_price, pr
 
     Two paths:
       1. CCXT (preferred) — ccxt handles the Binance endpoint routing internally.
-      2. REST Algo Order API — Binance requires /fapi/v1/algo/futures/newConditionalOrder
-         for STOP_MARKET with closePosition=true. The legacy /fapi/v1/order returns -4120.
+      2. REST Algo Order API — Binance requires POST /fapi/v1/algoOrder
+         with algoType=CONDITIONAL and type=STOP_MARKET for closePosition=true.
     """
+    # Normalize position_side to Binance Hedge Mode requirements ('LONG' or 'SHORT')
+    position_side = 'LONG' if str(position_side).upper() in ['BUY', 'LONG'] else 'SHORT'
+    close_side = 'SELL' if position_side == 'LONG' else 'BUY'
+
     stop_str = f"{stop_price:.{price_prec}f}"
     for attempt in range(max_retries):
         try:
@@ -1419,29 +1475,33 @@ def place_protective_stop(symbol, close_side, position_side, qty, stop_price, pr
             if oid:
                 return True, oid, None, stop_str
         except Exception as e:
-            print(f"[STOP PLACEMENT RETRY {attempt+1}/{max_retries}] {symbol} ccxt error: {e}", flush=True)
+            err_str = str(e)
+            print(f"[STOP PLACEMENT RETRY {attempt+1}/{max_retries}] {symbol} CCXT error: {err_str}", flush=True)
+            if "-4130" in err_str:
+                cancel_existing_protective_stops(symbol, position_side)
 
-        # REST fallback: use Algo Order API (required for STOP_MARKET + closePosition)
+        # REST fallback: use authoritative Binance Algo Order API (/fapi/v1/algoOrder)
         try:
             algo_params = {
                 'symbol': symbol,
                 'side': close_side,
                 'positionSide': position_side,
-                'type': 'CONDITIONAL',
-                'orderType': 'STOP_MARKET',
+                'algoType': 'CONDITIONAL',
+                'type': 'STOP_MARKET',
                 'triggerPrice': stop_str,
-                'closePosition': 'true',
-                'workingType': 'CONTRACT_PRICE'
+                'closePosition': 'true'
             }
-            res = binance_futures_signed_request('POST', '/fapi/v1/algo/futures/newConditionalOrder', algo_params)
+            res = binance_futures_signed_request('POST', '/fapi/v1/algoOrder', algo_params)
             if isinstance(res, dict) and 'algoId' in res:
-                return True, res['algoId'], None, stop_str
+                return True, res['algoId'], res['algoId'], stop_str
             print(f"[STOP PLACEMENT RETRY {attempt+1}/{max_retries}] {symbol} AlgoAPI response: {res}", flush=True)
+            if isinstance(res, dict) and res.get('code') == -4130:
+                cancel_existing_protective_stops(symbol, position_side)
         except Exception as e:
             print(f"[STOP PLACEMENT RETRY {attempt+1}/{max_retries}] {symbol} AlgoAPI error: {e}", flush=True)
 
         if attempt < max_retries - 1:
-            time.sleep(0.6)
+            time.sleep(0.5)
 
     return False, None, None, stop_str
 
@@ -2057,6 +2117,7 @@ def check_order_flow_absorption(symbol, target_side, trades_limit=500):
 # Upgrade 4: 3-Stage Scale-Out & Dynamic Trailing Stop Daemon (State & Disk Persistence)
 # --------------------------------------------------------------------------
 ACTIVE_POSITION_TARGETS = {}
+UNSUPPORTED_TRADFI_SYMBOLS = set()
 _POSITION_TARGETS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'state', 'active_position_targets.json')
 
 def _save_position_targets():
@@ -2174,75 +2235,74 @@ def place_binance_futures_tp_sl(symbol, side, last_price, atr, leverage=75, tota
     exchange = get_ccxt_exchange()
     ccxt_sym = to_ccxt_symbol(symbol)
 
-    # --- Leg 1: TP1 (non-fatal if fails — we proceed without exchange-side TP) ---
+    # --- Leg 1: TP1 (Binance Algo Order API — eliminates -1106 and -4120 errors) ---
     try:
-        # Note: In Hedge Mode (dualSidePosition=True), Binance rejects 'reduceOnly' with error -1106
-        tp_params = {'stopPrice': float(tp1_str), 'positionSide': position_side}
-        tp_order = exchange.create_order(
-            symbol=ccxt_sym, type='TAKE_PROFIT_MARKET',
-            side=close_side.lower(), amount=float(tp1_qty_str), params=tp_params
-        )
-        tp_res = {'status': 'success', 'id': tp_order.get('id'), 'price': tp1_str, 'qty': tp1_qty_str}
-        tp1_order_id_placed = tp_order.get('id')
-    except Exception as e_tp1:
-        print(f"[TP1 WARN] #{symbol} CCXT TP1 failed ({e_tp1}), trying REST fallback...", flush=True)
-        try:
-            tp_rest = binance_futures_signed_request('POST', '/fapi/v1/order', {
+        tp1_algo_params = {
+            'symbol': symbol,
+            'side': close_side,
+            'positionSide': position_side,
+            'algoType': 'CONDITIONAL',
+            'type': 'TAKE_PROFIT_MARKET',
+            'triggerPrice': tp1_str,
+            'quantity': tp1_qty_str,
+            'closePosition': 'false'
+        }
+        tp_rest = binance_futures_signed_request('POST', '/fapi/v1/algoOrder', tp1_algo_params)
+        if isinstance(tp_rest, dict) and ('algoId' in tp_rest or 'orderId' in tp_rest):
+            tp_oid = tp_rest.get('algoId') or tp_rest.get('orderId')
+            tp_res = {'status': 'success', 'id': tp_oid, 'price': tp1_str, 'qty': tp1_qty_str}
+            tp1_order_id_placed = tp_oid
+        else:
+            # Fallback to legacy /fapi/v1/order if algoOrder is unavailable
+            tp_legacy = binance_futures_signed_request('POST', '/fapi/v1/order', {
                 'symbol': symbol, 'side': close_side, 'type': 'TAKE_PROFIT_MARKET',
                 'stopPrice': tp1_str, 'quantity': tp1_qty_str, 'positionSide': position_side
             })
-            tp_res = tp_rest
-            if isinstance(tp_rest, dict):
-                tp1_order_id_placed = tp_rest.get('orderId')
-        except Exception as e_tp1r:
-            print(f"[TP1 WARN] #{symbol} REST TP1 also failed ({e_tp1r}). Continuing — SL is the critical guard.", flush=True)
+            if isinstance(tp_legacy, dict) and 'orderId' in tp_legacy:
+                tp_res = {'status': 'success', 'id': tp_legacy.get('orderId'), 'price': tp1_str, 'qty': tp1_qty_str}
+                tp1_order_id_placed = tp_legacy.get('orderId')
+            else:
+                print(f"[TP1 WARN] #{symbol} TP1 placement response: {tp_rest or tp_legacy}", flush=True)
+    except Exception as e_tp1r:
+        print(f"[TP1 WARN] #{symbol} TP1 failed ({e_tp1r}). Continuing — SL is the critical guard.", flush=True)
 
     # --- Leg 2: TP2 (non-fatal — tracked for swing scale-out) ---
     if place_tp2_order:
         try:
-            tp2_order = exchange.create_order(
-                symbol=ccxt_sym, type='TAKE_PROFIT_MARKET',
-                side=close_side.lower(), amount=float(tp2_qty_str),
-                params={'stopPrice': float(tp2_str), 'positionSide': position_side}
-            )
-            tp2_res = {'status': 'success', 'id': tp2_order.get('id'), 'price': tp2_str, 'qty': tp2_qty_str}
-            tp2_order_id_placed = tp2_order.get('id')
-        except Exception as e_tp2:
-            print(f"[TP2 RESTING ORDER WARN] #{symbol} TP2 not placed ({e_tp2}), falling back to internal trailing runner.", flush=True)
-            try:
-                tp2_rest = binance_futures_signed_request('POST', '/fapi/v1/order', {
+            tp2_algo_params = {
+                'symbol': symbol,
+                'side': close_side,
+                'positionSide': position_side,
+                'algoType': 'CONDITIONAL',
+                'type': 'TAKE_PROFIT_MARKET',
+                'triggerPrice': tp2_str,
+                'quantity': tp2_qty_str,
+                'closePosition': 'false'
+            }
+            tp2_rest = binance_futures_signed_request('POST', '/fapi/v1/algoOrder', tp2_algo_params)
+            if isinstance(tp2_rest, dict) and ('algoId' in tp2_rest or 'orderId' in tp2_rest):
+                tp2_oid = tp2_rest.get('algoId') or tp2_rest.get('orderId')
+                tp2_res = {'status': 'success', 'id': tp2_oid, 'price': tp2_str, 'qty': tp2_qty_str}
+                tp2_order_id_placed = tp2_oid
+            else:
+                tp2_legacy = binance_futures_signed_request('POST', '/fapi/v1/order', {
                     'symbol': symbol, 'side': close_side, 'type': 'TAKE_PROFIT_MARKET',
                     'stopPrice': tp2_str, 'quantity': tp2_qty_str, 'positionSide': position_side
                 })
-                tp2_res = tp2_rest
-                if isinstance(tp2_rest, dict):
-                    tp2_order_id_placed = tp2_rest.get('orderId')
-            except Exception:
-                pass
+                if isinstance(tp2_legacy, dict) and 'orderId' in tp2_legacy:
+                    tp2_res = {'status': 'success', 'id': tp2_legacy.get('orderId'), 'price': tp2_str, 'qty': tp2_qty_str}
+                    tp2_order_id_placed = tp2_legacy.get('orderId')
+        except Exception as e_tp2r:
+            print(f"[TP2 WARN] #{symbol} TP2 failed ({e_tp2r}).", flush=True)
 
     # --- Leg 3: SL (CRITICAL — failure = abort entire bracket) ---
-    sl_placed = False
-    try:
-        # BUG-4 Fix retained: closePosition=True prevents reverse-position risk
-        sl_order = exchange.create_order(
-            symbol=ccxt_sym, type='STOP_MARKET',
-            side=close_side.lower(), amount=float(total_qty),
-            params={'stopPrice': float(sl_str), 'positionSide': position_side, 'closePosition': True}
-        )
-        sl_res = {'status': 'success', 'id': sl_order.get('id'), 'price': sl_str}
-        sl_placed = bool(sl_order.get('id'))
-    except Exception as e_sl:
-        print(f"[SL WARN] #{symbol} CCXT SL failed ({e_sl}), trying REST fallback...", flush=True)
-        try:
-            sl_rest = binance_futures_signed_request('POST', '/fapi/v1/order', {
-                'symbol': symbol, 'side': close_side, 'type': 'STOP_MARKET',
-                'stopPrice': sl_str, 'closePosition': 'true', 'positionSide': position_side
-            })
-            sl_res = sl_rest
-            if isinstance(sl_rest, dict) and 'orderId' in sl_rest:
-                sl_placed = True
-        except Exception as e_slr:
-            print(f"[SL CRITICAL FAILURE] #{symbol} REST SL also failed ({e_slr}).", flush=True)
+    # Pre-emptively clear any stale stops on Binance for this symbol/direction to prevent -4130
+    cancel_existing_protective_stops(symbol, position_side=position_side)
+    sl_placed, sl_order_id, _, _ = place_protective_stop(
+        symbol=symbol, close_side=close_side, position_side=position_side,
+        qty=total_qty, stop_price=float(sl_str), price_prec=price_prec
+    )
+    sl_res = {'status': 'success', 'id': sl_order_id, 'price': sl_str} if sl_placed else None
 
     # BUG-1 Fix: If SL could not be placed — cancel TP orders, alert, abort recording.
     if not sl_placed:
@@ -2263,8 +2323,7 @@ def place_binance_futures_tp_sl(symbol, side, last_price, atr, leverage=75, tota
         return {'error': 'SL placement failed', 'tp_res': tp_res, 'sl_res': sl_res}
 
     # Capture order ids so later stages can cancel/track THIS specific order
-    sl_order_id = None
-    if isinstance(sl_res, dict):
+    if isinstance(sl_res, dict) and not sl_order_id:
         sl_order_id = sl_res.get('id') or sl_res.get('orderId')
 
     tp2_order_id = None
@@ -2306,46 +2365,62 @@ def place_binance_futures_tp_sl(symbol, side, last_price, atr, leverage=75, tota
 # Dynamic Trailing Stop Daemon Core Logic
 # --------------------------------------------------------------------------
 
-def _replace_protective_stop(sym, close_side, side, qty, new_stop_price, price_prec, old_order_id, context_label):
+def _replace_protective_stop(sym, close_side, side, qty, new_stop_price, price_prec, old_order_id, context_label, mark_price=None, old_stop_price=None):
     """
-    Shared 'cancel-then-place' sequence used by every trailing stop stage below.
-
-    Binance only permits ONE closePosition=True stop per direction per symbol.
-    Attempting to place a second one while the first is live returns -4130.
-    Therefore the old stop MUST be cancelled first, then the new one placed.
-
-    This creates a brief window (~200ms) with no stop on the exchange.
-    This is an acceptable tradeoff because:
-      1. The window is extremely short (one API round-trip).
-      2. The alternative (place-then-cancel) is impossible with closePosition=true.
-      3. If the new placement fails, we alert immediately via Telegram.
-
-    Returns the new order id on success, or None on failure.
+    Authoritative stop replacement sequence:
+    Binance only permits ONE closePosition=True stop per direction per symbol (-4130).
+    1. Pre-validates new stop against mark_price to prevent -2021 (Order would immediately trigger).
+       If invalid, aborts before cancelling any existing stop.
+    2. Authoritatively finds and cancels ALL existing stops for this symbol/direction on Binance.
+    3. Places and verifies the new protective stop on Binance.
+    4. If placement fails, immediately attempts to restore the previous stop (old_stop_price) safely.
     """
     stop_str = f"{new_stop_price:.{price_prec}f}"
+    norm_side = 'LONG' if str(side).upper() in ['BUY', 'LONG'] else 'SHORT'
+    close_side = 'SELL' if norm_side == 'LONG' else 'BUY'
 
-    # Step 1: Cancel the existing stop order first (Binance -4130 requires this)
+    # Pre-flight check: Prevent Binance -2021 (Order would immediately trigger)
+    # A STOP_MARKET SELL must trigger strictly BELOW mark price.
+    # A STOP_MARKET BUY must trigger strictly ABOVE mark price.
+    if mark_price is not None and mark_price > 0:
+        if norm_side == 'LONG' and new_stop_price >= mark_price:
+            print(f"⚠️ [STOP UPDATE SKIPPED] #{sym} LONG stop ${stop_str} >= mark price ${mark_price:.{price_prec}f} (would trigger -2021). Aborting replacement; keeping old stop.", flush=True)
+            return old_order_id, None
+        elif norm_side == 'SHORT' and new_stop_price <= mark_price:
+            print(f"⚠️ [STOP UPDATE SKIPPED] #{sym} SHORT stop ${stop_str} <= mark price ${mark_price:.{price_prec}f} (would trigger -2021). Aborting replacement; keeping old stop.", flush=True)
+            return old_order_id, None
+
+    # Step 1: Authoritatively clear any existing stop on Binance for this symbol/direction
+    cancel_existing_protective_stops(sym, position_side=norm_side)
     if old_order_id:
         cancel_binance_order_by_id(sym, order_id=old_order_id)
-        time.sleep(0.15)  # Brief settle time for Binance to process the cancellation
+    time.sleep(0.12)  # Brief settle time for Binance engine to process cancellation
 
     # Step 2: Place the new stop
     success, new_order_id, _, placed_str = place_protective_stop(
-        symbol=sym, close_side=close_side, position_side=side,
+        symbol=sym, close_side=close_side, position_side=norm_side,
         qty=qty, stop_price=new_stop_price, price_prec=price_prec
     )
     if not success:
-        # CRITICAL: Old stop was already cancelled — position is now NAKED.
-        # Try to restore the old stop price as an emergency fallback.
+        # CRITICAL: Old stop was cleared — position needs emergency stop restoration.
         print(f"🚨 [STOP UPDATE FAILED] #{sym} new {context_label} stop failed — attempting emergency restore of old stop...", flush=True)
+        # Determine safest restore price: use old_stop_price if available and safe, or a safe cushion
+        restore_price = old_stop_price if (old_stop_price is not None and old_stop_price > 0) else new_stop_price
+        if mark_price is not None and mark_price > 0:
+            if norm_side == 'LONG' and restore_price >= mark_price:
+                restore_price = mark_price * 0.998  # Safe buffer below mark
+            elif norm_side == 'SHORT' and restore_price <= mark_price:
+                restore_price = mark_price * 1.002  # Safe buffer above mark
+
+        restore_str = f"{restore_price:.{price_prec}f}"
         restore_ok, restore_id, _, _ = place_protective_stop(
-            symbol=sym, close_side=close_side, position_side=side,
-            qty=qty, stop_price=float(stop_str), price_prec=price_prec
+            symbol=sym, close_side=close_side, position_side=norm_side,
+            qty=qty, stop_price=float(restore_str), price_prec=price_prec
         )
         if restore_ok:
-            print(f"🔄 [STOP RESTORED] #{sym} old stop restored at ${stop_str} after failed update.", flush=True)
-            send_telegram_msg(f"⚠️ <b>STOP UPDATE FAILED — OLD STOP RESTORED</b>\n\n#{sym}: could not place new {context_label} stop (${placed_str}) after retries.\nOld stop has been restored at <b>${stop_str}</b> as fallback.")
-            return restore_id, stop_str
+            print(f"🔄 [STOP RESTORED] #{sym} emergency stop restored at ${restore_str} after failed update.", flush=True)
+            send_telegram_msg(f"⚠️ <b>STOP UPDATE FAILED — EMERGENCY STOP RESTORED</b>\n\n#{sym}: could not place new {context_label} stop (${placed_str}).\nProtective stop has been restored at <b>${restore_str}</b> as safety fallback.")
+            return restore_id, restore_str
         else:
             print(f"🚨🚨 [CRITICAL] #{sym} BOTH new and restore stops FAILED — POSITION HAS NO STOP LOSS!", flush=True)
             send_telegram_msg(f"🚨🚨 <b>CRITICAL: NO STOP LOSS</b>\n\n#{sym}: new {context_label} stop AND restore both failed!\n<b>Position is NAKED — intervene immediately!</b>\nCheck <code>/positions</code>.")
@@ -2357,19 +2432,23 @@ def _replace_protective_stop(sym, close_side, side, qty, new_stop_price, price_p
 def manage_active_positions_breakeven(positions=None):
     """
     Upgrade 4: 3-Stage Scale-Out & Real-Time Trailing Stop Daemon:
+    - Stage 0: Early breakeven lock for Quick Scalps once profit clears BE + buffer.
     - Stage 1 (TP1 Hit @ 33%): Moves SL to Breakeven (+0.05% fee cover buffer) on remaining 67%.
     - Stage 2 (TP2 Hit @ 33%): Closes 33% at structural target and tightens trailing stop.
     - Stage 3 (TP3 Runner @ 34%): Dynamic trailing stop walks behind price (0.7x ATR for Quick Scalps, 1.4x ATR for Trend Runners).
 
-    Every stop replacement below places and confirms the new stop BEFORE cancelling
-    the old one (see _replace_protective_stop), so a leveraged position is never
-    left with zero protective orders on the exchange due to a failed API call.
-    BUG-8 Fix: Accepts pre-fetched positions.
+    Safeguards:
+    - If positions is None (Binance API timeout/error), reconciliation is skipped to protect active targets.
+    - Validates stop prices against mark prices before cancelling existing stops to prevent -2021 errors.
     """
     global ACTIVE_POSITION_TARGETS
     try:
         if positions is None:
             positions = get_binance_futures_positions()
+        if positions is None:
+            print("[POSITION RECONCILIATION WARN] Could not fetch positions from Binance (API error/timeout). Skipping reconciliation to protect active targets.", flush=True)
+            return
+
         live_syms = set(p['symbol'] for p in positions if abs(float(p.get('positionAmt', 0.0))) > 0.0)
 
         # BUG-5 Fix: Clean up closed symbols and send Telegram alert
@@ -2414,71 +2493,75 @@ def manage_active_positions_breakeven(positions=None):
             tp2_p = target.get('tp2', 0.0)
             atr_val = target.get('atr', entry_p * 0.008)
 
-            if entry_p <= 0 or tp1_p <= 0:
+            if entry_p <= 0 or tp1_p <= 0 or mark_p <= 0:
                 continue
 
             price_prec, qty_prec = get_symbol_precision(sym)
             close_side = 'SELL' if side == 'LONG' else 'BUY'
 
-            # --- STAGE 0: Fast Early Breakeven for Counter-Trend Quick Scalps (+0.35x ATR profit) ---
+            # --- STAGE 0: Fast Early Breakeven for Counter-Trend Quick Scalps ---
+            # Must satisfy BOTH +0.35x ATR profit AND mark price safely clearing breakeven + buffer
             if target.get('is_quick_scalp') and not target.get('tp1_hit') and not target.get('trailing_active'):
-                in_quick_profit = (side == 'LONG' and mark_p >= entry_p + (0.35 * atr_val)) or (side == 'SHORT' and mark_p <= entry_p - (0.35 * atr_val))
+                be_price = entry_p * 1.0005 if side == 'LONG' else entry_p * 0.9995
+                safe_buffer = max(0.10 * atr_val, entry_p * 0.0005)
+                in_quick_profit = (
+                    (side == 'LONG' and mark_p >= (entry_p + 0.35 * atr_val) and mark_p >= (be_price + safe_buffer)) or
+                    (side == 'SHORT' and mark_p <= (entry_p - 0.35 * atr_val) and mark_p <= (be_price - safe_buffer))
+                )
                 if in_quick_profit:
-                    be_price = entry_p * 1.0005 if side == 'LONG' else entry_p * 0.9995
                     new_order_id, be_str = _replace_protective_stop(
                         sym, close_side, side, abs(amt), be_price, price_prec,
-                        old_order_id=target.get('sl_order_id'), context_label="quick_scalp_breakeven"
+                        old_order_id=target.get('sl_order_id'), context_label="quick_scalp_breakeven",
+                        mark_price=mark_p, old_stop_price=target.get('current_sl')
                     )
-                    if new_order_id is not None:
+                    if new_order_id is not None and be_str is not None:
                         target['sl_order_id'] = new_order_id
                         target['current_sl'] = be_price
                         target['trailing_active'] = True
                         target['highest_mark'] = mark_p
                         target['lowest_mark'] = mark_p
-                        print(f"⚡ [QUICK SCALP FAST BREAKEVEN LOCKED] #{sym} moved SL to Breakeven (${be_str}) at +0.35x ATR! 🔒", flush=True)
-                        # BUG-B Fix: Skip Stage 1 on same iteration — trailing_active is now
-                        # True so Stage 1 would re-check and double-place a BE stop redundantly.
+                        print(f"⚡ [QUICK SCALP FAST BREAKEVEN LOCKED] #{sym} moved SL to Breakeven (${be_str})! 🔒", flush=True)
                         continue
 
             # --- STAGE 1: Detect TP1 Hit & Shift Stop Loss to Breakeven ---
             if not target.get('tp1_hit'):
                 hit_tp1 = abs(amt) <= (target['initial_qty'] * 0.75)
                 if hit_tp1:
-                    be_price = entry_p * 1.0005 if side == 'LONG' else entry_p * 0.9995
-
-                    new_order_id, be_str = _replace_protective_stop(
-                        sym, close_side, side, abs(amt), be_price, price_prec,
-                        old_order_id=target.get('sl_order_id'), context_label="breakeven"
-                    )
-                    if new_order_id is None:
-                        # Old SL is still resting on the exchange (untouched) — retry next poll.
-                        continue
-
-                    target['sl_order_id'] = new_order_id
                     target['tp1_hit'] = True
-                    target['trailing_active'] = True
-                    target['current_sl'] = be_price
-                    target['highest_mark'] = mark_p
-                    target['lowest_mark'] = mark_p
-                    print(f"🎯 [TP1 HIT / SCALED OUT] #{sym} reached TP1! 100% Risk Free! 🚀", flush=True)
-                    send_telegram_msg(f"🎯 <b>STAGE 1: TP1 HIT / PROFIT LOCKED</b>\n\n• Asset: <b>#{sym}</b> ({side})\n• Mark Price: <b>${mark_p:,.4f}</b>\n• Stop: <b>${be_str}</b> (Breakeven Locked 🔒)")
-                    continue
+                    be_price = entry_p * 1.0005 if side == 'LONG' else entry_p * 0.9995
+                    safe_buffer = max(0.05 * atr_val, entry_p * 0.0003)
+
+                    can_place_be = (side == 'LONG' and mark_p >= (be_price + safe_buffer)) or \
+                                   (side == 'SHORT' and mark_p <= (be_price - safe_buffer))
+
+                    if can_place_be:
+                        new_order_id, be_str = _replace_protective_stop(
+                            sym, close_side, side, abs(amt), be_price, price_prec,
+                            old_order_id=target.get('sl_order_id'), context_label="breakeven",
+                            mark_price=mark_p, old_stop_price=target.get('current_sl')
+                        )
+                        if new_order_id is not None and be_str is not None:
+                            target['sl_order_id'] = new_order_id
+                            target['trailing_active'] = True
+                            target['current_sl'] = be_price
+                            target['highest_mark'] = mark_p
+                            target['lowest_mark'] = mark_p
+                            print(f"🎯 [TP1 HIT / SCALED OUT] #{sym} reached TP1! Breakeven Stop Locked at ${be_str}! 🚀", flush=True)
+                            send_telegram_msg(f"🎯 <b>STAGE 1: TP1 HIT / PROFIT LOCKED</b>\n\n• Asset: <b>#{sym}</b> ({side})\n• Mark Price: <b>${mark_p:,.4f}</b>\n• Stop: <b>${be_str}</b> (Breakeven Locked 🔒)")
+                            continue
+                    else:
+                        print(f"🎯 [TP1 HIT / BREAKEVEN DEFERRED] #{sym} TP1 filled, but mark price (${mark_p:,.4f}) has not cleared breakeven buffer (${be_price:,.4f}). Preserving current SL (${target.get('current_sl')}).", flush=True)
+                        continue
 
             # --- STAGE 2: Detect TP2 Hit (Additional 33% Scale-Out) ---
             if target.get('tp1_hit') and not target.get('tp2_hit') and tp2_p > 0:
                 hit_tp2 = False
 
                 if target.get('tp2_order_id'):
-                    # TP2 is a REAL TAKE_PROFIT_MARKET order resting on Binance (placed at
-                    # entry in place_binance_futures_tp_sl) — it fires on its own even if
-                    # this bot is offline. Detect the fill by the resulting quantity drop,
-                    # exactly like Stage 1's TP1 detection, rather than re-closing manually.
                     hit_tp2 = abs(amt) <= (target['initial_qty'] * 0.45)
                     if hit_tp2:
                         print(f"🎯🎯 [TP2 EXCHANGE FILL DETECTED] #{sym} conditional TP2 order filled on Binance.", flush=True)
                 else:
-                    # Fallback path: TP2 couldn't be placed as a real order at entry
-                    # (position too small to split further) — poll-trigger a market close.
                     hit_tp2 = (side == 'LONG' and mark_p >= tp2_p) or (side == 'SHORT' and mark_p <= tp2_p)
                     if hit_tp2:
                         scale2_qty = round(target['initial_qty'] * 0.33, qty_prec)
@@ -2512,19 +2595,22 @@ def manage_active_positions_breakeven(positions=None):
                     target['tp2_hit'] = True
                     # Tighten trailing stop distance on final 34% runner
                     tight_sl = (target['highest_mark'] - (0.6 * atr_val if target.get('is_quick_scalp') else 0.8 * atr_val)) if side == 'LONG' else (target['lowest_mark'] + (0.6 * atr_val if target.get('is_quick_scalp') else 0.8 * atr_val))
+                    if side == 'LONG' and tight_sl >= mark_p:
+                        tight_sl = mark_p - (0.1 * atr_val)
+                    elif side == 'SHORT' and tight_sl <= mark_p:
+                        tight_sl = mark_p + (0.1 * atr_val)
+
                     if (side == 'LONG' and tight_sl > target['current_sl']) or (side == 'SHORT' and tight_sl < target['current_sl']):
-                        # BUG-5 Fix: Actually place the tightened stop on the exchange,
-                        # not just in memory. Without this, the old breakeven stop stays
-                        # on Binance while the bot only *thinks* it tightened.
                         new_order_id, tight_str = _replace_protective_stop(
                             sym, close_side, side, abs(amt), tight_sl, price_prec,
-                            old_order_id=target.get('sl_order_id'), context_label="tp2_tighten"
+                            old_order_id=target.get('sl_order_id'), context_label="tp2_tighten",
+                            mark_price=mark_p, old_stop_price=target.get('current_sl')
                         )
-                        if new_order_id is not None:
+                        if new_order_id is not None and tight_str is not None:
                             target['sl_order_id'] = new_order_id
                             target['current_sl'] = tight_sl
                         else:
-                            target['current_sl'] = tight_sl  # Track intent even if exchange update failed
+                            target['current_sl'] = tight_sl
 
                     print(f"🎯🎯 [TP2 33% SCALED OUT] #{sym} reached TP2! Major profit locked! Trailing stop tightened! 🚀", flush=True)
                     send_telegram_msg(f"🎯🎯 <b>STAGE 2: TP2 SCALED OUT (66% TOTAL PROFIT LOCKED)</b>\n\n• Asset: <b>#{sym}</b> ({side})\n• Mark Price: <b>${mark_p:,.4f}</b>\n\n<i>🏃 Final 34% TP3 Runner trailing stop tightened to ride trend!</i>")
@@ -2542,18 +2628,16 @@ def manage_active_positions_breakeven(positions=None):
                         target['highest_mark'] = mark_p
 
                     calc_trail = target['highest_mark'] - trail_distance
-                    # BUG-6 Fix: Remove overly restrictive 'and calc_trail > entry_p'
-                    # The current_sl + 0.25*atr condition ensures the stop only ratchets upwards.
-                    # Also guard against calc_trail exceeding current mark_p (which would immediately trigger).
                     if calc_trail > (target['current_sl'] + (0.25 * atr_val)):
                         if calc_trail >= mark_p:
                             calc_trail = mark_p - (0.1 * atr_val)
                         if calc_trail > target['current_sl']:
                             new_order_id, trail_str = _replace_protective_stop(
                                 sym, close_side, side, abs(amt), calc_trail, price_prec,
-                                old_order_id=target.get('sl_order_id'), context_label="trailing"
+                                old_order_id=target.get('sl_order_id'), context_label="trailing",
+                                mark_price=mark_p, old_stop_price=target.get('current_sl')
                             )
-                            if new_order_id is not None:
+                            if new_order_id is not None and trail_str is not None:
                                 target['sl_order_id'] = new_order_id
                                 target['current_sl'] = calc_trail
                                 print(f"📈 [TRAILING STOP TRAILED UP] #{sym} (LONG) -> New Stop Loss: ${trail_str} (Peak: ${target['highest_mark']:,.4f})", flush=True)
@@ -2563,18 +2647,16 @@ def manage_active_positions_breakeven(positions=None):
                         target['lowest_mark'] = mark_p
 
                     calc_trail = target['lowest_mark'] + trail_distance
-                    # BUG-6 Fix: Remove overly restrictive 'and calc_trail < entry_p'
-                    # The current_sl - 0.25*atr condition ensures the stop only ratchets downwards.
-                    # Also guard against calc_trail falling below current mark_p (which would immediately trigger).
                     if calc_trail < (target['current_sl'] - (0.25 * atr_val)):
                         if calc_trail <= mark_p:
                             calc_trail = mark_p + (0.1 * atr_val)
                         if calc_trail < target['current_sl']:
                             new_order_id, trail_str = _replace_protective_stop(
                                 sym, close_side, side, abs(amt), calc_trail, price_prec,
-                                old_order_id=target.get('sl_order_id'), context_label="trailing"
+                                old_order_id=target.get('sl_order_id'), context_label="trailing",
+                                mark_price=mark_p, old_stop_price=target.get('current_sl')
                             )
-                            if new_order_id is not None:
+                            if new_order_id is not None and trail_str is not None:
                                 target['sl_order_id'] = new_order_id
                                 target['current_sl'] = calc_trail
                                 print(f"📉 [TRAILING STOP TRAILED DOWN] #{sym} (SHORT) -> New Stop Loss: ${trail_str} (Trough: ${target['lowest_mark']:,.4f})", flush=True)
@@ -2670,7 +2752,25 @@ def place_binance_futures_market_order(symbol="XRPUSDT", side="BUY", trade_usdt=
     res = binance_futures_signed_request('POST', '/fapi/v1/order', params)
 
     if isinstance(res, dict) and 'code' in res and 'orderId' not in res:
-        print(f"[BINANCE REJECTED ORDER] {symbol} {side} Error: {res.get('msg')} (code: {res.get('code')})", flush=True)
+        err_code = res.get('code')
+        err_msg = res.get('msg')
+        print(f"[BINANCE REJECTED ORDER] {symbol} {side} Error: {err_msg} (code: {err_code})", flush=True)
+        if err_code == -4411:
+            global UNSUPPORTED_TRADFI_SYMBOLS
+            if symbol not in UNSUPPORTED_TRADFI_SYMBOLS:
+                UNSUPPORTED_TRADFI_SYMBOLS.add(symbol)
+                t_alert = (
+                    f"⚠️ <b>TRADFI PERPS CONTRACT REQUIRED (-4411)</b>\n\n"
+                    f"• Symbol: <b>#{symbol}</b>\n"
+                    f"• Binance Error: <i>{err_msg}</i>\n"
+                    f"• <b>Action:</b> Automatically disabled #{symbol} to prevent repeated rejected orders.\n\n"
+                    f"💡 Sign the TradFi-Perps agreement in Binance Futures web UI, then run <code>/unban {symbol}</code> or restart."
+                )
+                print(f"[TRADFI AUTO-DISABLED] #{symbol} disabled due to unsigned TradFi-Perps contract (-4411).", flush=True)
+                try:
+                    send_telegram_msg(t_alert)
+                except Exception:
+                    pass
     elif isinstance(res, dict) and 'orderId' in res:
         mode_str = "⚡ QUICK SCALP" if is_quick_scalp else "🌊 TREND RUNNER"
         print(f"[BINANCE ORDER FILLED] #{symbol} {side} [{mode_str}] Order ID: #{res.get('orderId')} | Status: {res.get('status', 'FILLED')}", flush=True)
@@ -3232,6 +3332,8 @@ class WeatherEnsembleBot:
     def evaluate_bar(self, df, symbol="XRPUSDT", active_count=0, positions=None):
         if df is None or len(df) < 5:
             return {'symbol': symbol, 'action': 'NO TRADE', 'is_trade': False}
+        if symbol in UNSUPPORTED_TRADFI_SYMBOLS:
+            return {'symbol': symbol, 'action': 'NO TRADE', 'is_trade': False, 'price': float(df['close'].iloc[-1]), 'consensus': 0, 'timestamp': df.index[-1] if isinstance(df.index[-1], str) else ''}
 
         last_price = float(df['close'].iloc[-1])
         signals = self.evaluate_31_models(df)
@@ -4084,6 +4186,21 @@ class WeatherEnsembleBot:
                 status_msg = ATLAS_DARWINIAN.get_status_report()
                 send_telegram_msg(status_msg, reply_markup=get_telegram_inline_keyboard(self.live_trading), chat_id=chat_id)
 
+            elif cmd in ['/tradfi', '/unban', '/enable_tradfi']:
+                global UNSUPPORTED_TRADFI_SYMBOLS
+                if len(parts) > 1:
+                    target_s = parts[1].upper().strip()
+                    if not target_s.endswith('USDT'):
+                        target_s += 'USDT'
+                    if target_s in UNSUPPORTED_TRADFI_SYMBOLS:
+                        UNSUPPORTED_TRADFI_SYMBOLS.remove(target_s)
+                        send_telegram_msg(f"✅ <b>#{target_s} re-enabled!</b> Bot will resume evaluating this symbol.", reply_markup=get_telegram_inline_keyboard(self.live_trading), chat_id=chat_id)
+                    else:
+                        send_telegram_msg(f"ℹ️ #{target_s} is not currently disabled.", reply_markup=get_telegram_inline_keyboard(self.live_trading), chat_id=chat_id)
+                else:
+                    dis_list = ", ".join(UNSUPPORTED_TRADFI_SYMBOLS) if UNSUPPORTED_TRADFI_SYMBOLS else "None"
+                    send_telegram_msg(f"ℹ️ <b>Disabled TradFi Symbols (-4411):</b> {dis_list}\nUsage to re-enable: <code>/unban XAUUSDT</code>", reply_markup=get_telegram_inline_keyboard(self.live_trading), chat_id=chat_id)
+
             elif cmd in ['/pause', '/stop']:
                 self.paused = True
                 send_telegram_msg("⏸️ <b>Automated trade execution PAUSED.</b>", reply_markup=get_telegram_inline_keyboard(self.live_trading), chat_id=chat_id)
@@ -4141,15 +4258,24 @@ class WeatherEnsembleBot:
 
                 # BUG-8 Fix: Fetch active positions ONCE per cycle and reuse across cleaner, daemon, and evaluation
                 active_positions = get_binance_futures_positions() if self.live_trading else []
-                active_symbols = set(p['symbol'] for p in active_positions if abs(float(p.get('positionAmt', 0.0))) > 0.0)
-                active_count = len(active_symbols)
+                if active_positions is not None:
+                    active_symbols = set(p['symbol'] for p in active_positions if abs(float(p.get('positionAmt', 0.0))) > 0.0)
+                    active_count = len(active_symbols)
+                else:
+                    # Retain tracked targets during transient API hiccups rather than zeroing out
+                    active_symbols = set(ACTIVE_POSITION_TARGETS.keys())
+                    active_count = len(active_symbols)
 
                 # 1. Automated Orphaned Order Cleaner & Real-Time Breakeven Trailing Stop Daemon
-                if self.live_trading:
+                if self.live_trading and active_positions is not None:
                     cleanup_orphaned_orders(active_positions=active_positions)
                     manage_active_positions_breakeven(positions=active_positions)
 
                 for symbol in OPTIMIZED_SYMBOLS:
+                    # ⚠️ TradFi Check: Skip symbols requiring unsigned TradFi contract (-4411)
+                    if symbol in UNSUPPORTED_TRADFI_SYMBOLS:
+                        continue
+
                     # 🛑 1 Position Per Symbol Maximum: Skip symbols that already have an active open position
                     if symbol in active_symbols:
                         continue
