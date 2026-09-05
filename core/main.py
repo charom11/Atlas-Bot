@@ -28,6 +28,21 @@ import requests
 import numpy as np
 import pandas as pd
 
+_parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _parent_dir not in sys.path:
+    sys.path.insert(0, _parent_dir)
+
+from trading_safety import (
+    TradingStateUnavailable,
+    RetryDecision,
+    classify_binance_error,
+    retry_call,
+    require_authoritative_positions,
+    choose_authoritative_stop,
+    exactly_one_protective_stop,
+    protective_stop_key,
+)
+
 if sys.platform == "win32":
     try:
         sys.stdout.reconfigure(encoding='utf-8')
@@ -1084,11 +1099,10 @@ def check_portfolio_risk_capacity(balance, new_margin_usdt, max_portfolio_margin
     try:
         if positions is None:
             positions = get_binance_futures_positions()
-        if positions is None:
-            return False, "Portfolio risk check failed: position data unavailable from Binance (Fail Closed)"
+        auth_positions = require_authoritative_positions(positions)
 
         total_current_margin = 0.0
-        for p in positions:
+        for p in auth_positions:
             notional = abs(float(p.get('notional', 0.0)))
             lev = float(p.get('leverage', 50))
             total_current_margin += (notional / lev) if lev > 0 else 0.0
@@ -1097,6 +1111,8 @@ def check_portfolio_risk_capacity(balance, new_margin_usdt, max_portfolio_margin
         if (total_current_margin + new_margin_usdt) > max_allowed_margin:
             return False, f"Portfolio Exposure Cap Reached (${total_current_margin + new_margin_usdt:.2f} > ${max_allowed_margin:.2f})"
         return True, "Capacity OK"
+    except TradingStateUnavailable as e:
+        return False, f"Portfolio risk check failed: {e} (Fail Closed)"
     except Exception as e:
         return False, f"Portfolio Capacity check error: {e} (Fail Closed)"
 
@@ -1155,60 +1171,73 @@ def get_symbol_min_notional(symbol):
     _, _, min_notional = get_symbol_info(symbol)
     return min_notional
 
-def binance_futures_signed_request(method, endpoint, params=None):
+def binance_futures_signed_request(method, endpoint, params=None, max_retries=3):
     global _SERVER_TIME_SYNCED
-    api_key = os.getenv('BINANCE_API_KEY', BINANCE_API_KEY)
-    api_secret = os.getenv('BINANCE_API_SECRET', BINANCE_API_SECRET)
+    api_key = (os.getenv('BINANCE_API_KEY') or BINANCE_API_KEY or '').strip().strip('"').strip("'")
+    api_secret = (os.getenv('BINANCE_API_SECRET') or BINANCE_API_SECRET or '').strip().strip('"').strip("'")
     if not api_key or not api_secret:
         return None
 
     if params is None:
         params = {}
 
-    # Use cached server time offset instead of fetching /fapi/v1/time every call
-    if not _SERVER_TIME_SYNCED:
-        sync_server_time()
-    timestamp = int(time.time() * 1000) + _SERVER_TIME_OFFSET
-
-    params['recvWindow'] = 10000
-    params['timestamp'] = timestamp
-
-    query_string = urllib.parse.urlencode(params)
-    signature = hmac.new(
-        api_secret.encode('utf-8'),
-        query_string.encode('utf-8'),
-        hashlib.sha256
-    ).hexdigest()
-
-    url = f"https://fapi.binance.com{endpoint}?{query_string}&signature={signature}"
     headers = {'X-MBX-APIKEY': api_key}
 
-    try:
-        if method.upper() == 'GET':
-            r = requests.get(url, headers=headers, timeout=5)
-        elif method.upper() == 'POST':
-            r = requests.post(url, headers=headers, timeout=5)
-        elif method.upper() == 'DELETE':
-            r = requests.delete(url, headers=headers, timeout=5)
-        else:
-            return None
+    for attempt in range(1, max_retries + 1):
+        if not _SERVER_TIME_SYNCED:
+            sync_server_time()
+        timestamp = int(time.time() * 1000) + _SERVER_TIME_OFFSET
+
+        call_params = dict(params)
+        call_params['recvWindow'] = 10000
+        call_params['timestamp'] = timestamp
+
+        query_string = urllib.parse.urlencode(call_params)
+        signature = hmac.new(
+            api_secret.encode('utf-8'),
+            query_string.encode('utf-8'),
+            hashlib.sha256
+        ).hexdigest()
+
+        url = f"https://fapi.binance.com{endpoint}?{query_string}&signature={signature}"
 
         try:
-            result = r.json()
-        except Exception:
-            return {'error': r.status_code, 'text': r.text}
+            if method.upper() == 'GET':
+                r = requests.get(url, headers=headers, timeout=5)
+            elif method.upper() == 'POST':
+                r = requests.post(url, headers=headers, timeout=5)
+            elif method.upper() == 'DELETE':
+                r = requests.delete(url, headers=headers, timeout=5)
+            else:
+                return None
 
-        # Re-sync if timestamp error detected
-        if isinstance(result, dict) and result.get('code') == -1021:
-            sync_server_time()
+            try:
+                result = r.json()
+            except Exception:
+                result = {'error': r.status_code, 'http_status': r.status_code, 'text': r.text}
 
-        # Check for IP whitelist / permission rejection (-2015)
-        if isinstance(result, dict) and result.get('code') == -2015:
-            trigger_ip_whitelist_alert(result.get('msg', 'Invalid API-key, IP, or permissions for action'))
+            # If response indicates an error, classify it with trading_safety
+            if isinstance(result, dict) and ('code' in result or 'http_status' in result):
+                code = result.get('code')
+                if code == -1021:
+                    sync_server_time()
+                elif code == -2015:
+                    trigger_ip_whitelist_alert(result.get('msg', 'Invalid API-key, IP, or permissions for action'))
 
-        return result
-    except Exception as e:
-        return {'error': str(e)}
+                decision = classify_binance_error(result, attempt=attempt, max_attempts=max_retries)
+                if decision.retry:
+                    time.sleep(decision.delay)
+                    continue
+
+            return result
+        except Exception as e:
+            decision = classify_binance_error(e, attempt=attempt, max_attempts=max_retries)
+            if decision.retry:
+                time.sleep(decision.delay)
+                continue
+            return {'error': str(e)}
+
+    return {'error': 'Max retries exceeded'}
 
 
 def get_binance_futures_usdt_balance(mode='wallet'):
@@ -1246,8 +1275,6 @@ def get_binance_futures_positions():
                 'entryPrice': float(p.get('entryPrice', 0.0)),
                 'markPrice': float(p.get('markPrice', 0.0)),
                 'unrealizedProfit': float(p.get('unRealizedProfit', 0.0)),
-                'liquidationPrice': float(p.get('liquidationPrice', 0.0)),
-                'leverage': p.get('leverage'),
                 'marginType': p.get('marginType'),
                 'side': 'LONG' if amt > 0 else 'SHORT'
             })
@@ -1264,39 +1291,41 @@ def cancel_existing_protective_stops(symbol, position_side=None):
     Eliminates Binance -4130 (duplicate closePosition order) completely.
     """
     cancelled_count = 0
+    norm_target_side = str(position_side).upper() if position_side else None
     try:
         # 1. Authoritatively check Algo Orders
         open_algo = binance_futures_signed_request('GET', '/fapi/v1/openAlgoOrders', {'symbol': symbol})
         if isinstance(open_algo, list):
             for a in open_algo:
-                if a.get('symbol') != symbol:
+                k_sym, k_side = protective_stop_key(a)
+                if k_sym != symbol.upper():
                     continue
-                o_type = a.get('orderType', '')
-                p_side = a.get('positionSide', '')
-                is_stop = o_type in ['STOP_MARKET', 'STOP'] or a.get('closePosition', False)
-                side_matches = (position_side is None) or (p_side == position_side)
+                o_type = str(a.get('orderType') or a.get('type') or '').upper()
+                is_stop = o_type in ['STOP_MARKET', 'STOP'] or a.get('closePosition') in (True, 'true', 'TRUE', 1, '1')
+                side_matches = (norm_target_side is None) or (k_side == norm_target_side)
                 if is_stop and side_matches:
                     algo_id = a.get('algoId')
                     if algo_id:
-                        res = binance_futures_signed_request('DELETE', '/fapi/v1/algoOrder', {'algoId': int(algo_id)})
+                        binance_futures_signed_request('DELETE', '/fapi/v1/algoOrder', {'algoId': int(algo_id)})
                         cancelled_count += 1
-                        print(f"[STOP RECONCILE] Cancelled existing Algo stop #{algo_id} on {symbol} ({p_side})", flush=True)
+                        print(f"[STOP RECONCILE] Cancelled existing Algo stop #{algo_id} on {symbol} ({k_side})", flush=True)
 
         # 2. Regular Orders check (for any non-algo STOP_MARKET)
         open_reg = binance_futures_signed_request('GET', '/fapi/v1/openOrders', {'symbol': symbol})
         if isinstance(open_reg, list):
             for o in open_reg:
-                if o.get('symbol') != symbol:
+                k_sym, k_side = protective_stop_key(o)
+                if k_sym != symbol.upper():
                     continue
-                o_type = o.get('type', '')
-                p_side = o.get('positionSide', '')
-                side_matches = (position_side is None) or (p_side == position_side)
-                if o_type in ['STOP_MARKET', 'STOP'] and side_matches:
+                o_type = str(o.get('type') or o.get('orderType') or '').upper()
+                is_stop = o_type in ['STOP_MARKET', 'STOP'] or o.get('closePosition') in (True, 'true', 'TRUE', 1, '1')
+                side_matches = (norm_target_side is None) or (k_side == norm_target_side)
+                if is_stop and side_matches:
                     oid = o.get('orderId')
                     if oid:
                         binance_futures_signed_request('DELETE', '/fapi/v1/order', {'symbol': symbol, 'orderId': oid})
                         cancelled_count += 1
-                        print(f"[STOP RECONCILE] Cancelled existing regular stop #{oid} on {symbol} ({p_side})", flush=True)
+                        print(f"[STOP RECONCILE] Cancelled existing regular stop #{oid} on {symbol} ({k_side})", flush=True)
     except Exception as e:
         print(f"[STOP RECONCILE WARN] {symbol} error querying open stops: {e}", flush=True)
 
@@ -1374,7 +1403,8 @@ def place_protective_stop(symbol, close_side, position_side, qty, stop_price, pr
     close_side = 'SELL' if position_side == 'LONG' else 'BUY'
 
     stop_str = f"{stop_price:.{price_prec}f}"
-    for attempt in range(max_retries):
+    for attempt in range(1, max_retries + 1):
+        decision = None
         try:
             exchange = get_ccxt_exchange()
             ccxt_sym = to_ccxt_symbol(symbol)
@@ -1390,9 +1420,12 @@ def place_protective_stop(symbol, close_side, position_side, qty, stop_price, pr
                 return True, oid, None, stop_str
         except Exception as e:
             err_str = str(e)
-            print(f"[STOP PLACEMENT RETRY {attempt+1}/{max_retries}] {symbol} CCXT error: {err_str}", flush=True)
+            decision = classify_binance_error(e, attempt=attempt, max_attempts=max_retries)
+            print(f"[STOP PLACEMENT RETRY {attempt}/{max_retries}] {symbol} CCXT error: {err_str}", flush=True)
             if "-4130" in err_str:
                 cancel_existing_protective_stops(symbol, position_side)
+            if not decision.retry:
+                print(f"⚠️ [STOP REJECTED] {symbol} non-retryable CCXT error ({decision.reason}). Skipping CCXT retries.", flush=True)
 
         # REST fallback: use authoritative Binance Algo Order API (/fapi/v1/algoOrder)
         try:
@@ -1408,14 +1441,23 @@ def place_protective_stop(symbol, close_side, position_side, qty, stop_price, pr
             res = binance_futures_signed_request('POST', '/fapi/v1/algoOrder', algo_params)
             if isinstance(res, dict) and 'algoId' in res:
                 return True, res['algoId'], res['algoId'], stop_str
-            print(f"[STOP PLACEMENT RETRY {attempt+1}/{max_retries}] {symbol} AlgoAPI response: {res}", flush=True)
-            if isinstance(res, dict) and res.get('code') == -4130:
-                cancel_existing_protective_stops(symbol, position_side)
+            print(f"[STOP PLACEMENT RETRY {attempt}/{max_retries}] {symbol} AlgoAPI response: {res}", flush=True)
+            if isinstance(res, dict):
+                decision = classify_binance_error(res, attempt=attempt, max_attempts=max_retries)
+                if res.get('code') == -4130:
+                    cancel_existing_protective_stops(symbol, position_side)
+                if not decision.retry:
+                    print(f"⚠️ [STOP REJECTED] {symbol} non-retryable AlgoAPI error ({decision.reason}). Aborting attempts.", flush=True)
+                    break
         except Exception as e:
-            print(f"[STOP PLACEMENT RETRY {attempt+1}/{max_retries}] {symbol} AlgoAPI error: {e}", flush=True)
+            print(f"[STOP PLACEMENT RETRY {attempt}/{max_retries}] {symbol} AlgoAPI error: {e}", flush=True)
+            decision = classify_binance_error(e, attempt=attempt, max_attempts=max_retries)
+            if not decision.retry:
+                break
 
-        if attempt < max_retries - 1:
-            time.sleep(0.5)
+        if attempt < max_retries:
+            delay = decision.delay if decision and decision.delay > 0 else 0.5
+            time.sleep(delay)
 
     return False, None, None, stop_str
 
@@ -1992,17 +2034,20 @@ def _load_position_targets():
             with open(_POSITION_TARGETS_FILE, 'r') as f:
                 loaded = json.load(f)
             if isinstance(loaded, dict) and loaded:
-                # Validate against live positions — drop entries for closed positions
-                live_positions = get_binance_futures_positions()
-                live_syms = set(p['symbol'] for p in live_positions if abs(float(p.get('positionAmt', 0.0))) > 0.0)
-                valid = {sym: data for sym, data in loaded.items() if sym in live_syms}
-                pruned = len(loaded) - len(valid)
-                ACTIVE_POSITION_TARGETS.update(valid)
-                if valid:
-                    print(f"[POSITION TARGETS RESTORED] Loaded {len(valid)} active target(s) from disk.", flush=True)
-                if pruned > 0:
-                    print(f"[POSITION TARGETS PRUNED] Removed {pruned} stale target(s) for closed positions.", flush=True)
-                _save_position_targets()  # Write back pruned version
+                try:
+                    live_positions = require_authoritative_positions(get_binance_futures_positions())
+                    live_syms = set(p['symbol'] for p in live_positions if abs(float(p.get('positionAmt', 0.0))) > 0.0)
+                    valid = {sym: data for sym, data in loaded.items() if sym in live_syms}
+                    pruned = len(loaded) - len(valid)
+                    ACTIVE_POSITION_TARGETS.update(valid)
+                    if valid:
+                        print(f"[POSITION TARGETS RESTORED] Loaded {len(valid)} active target(s) from disk.", flush=True)
+                    if pruned > 0:
+                        print(f"[POSITION TARGETS PRUNED] Removed {pruned} stale target(s) for closed positions.", flush=True)
+                    _save_position_targets()  # Write back pruned version
+                except TradingStateUnavailable:
+                    ACTIVE_POSITION_TARGETS.update(loaded)
+                    print(f"[POSITION TARGETS RESTORED] Binance offline on boot; safely preserved {len(loaded)} target(s) from disk.", flush=True)
     except Exception as e:
         print(f"[POSITION TARGETS LOAD WARN] {e}", flush=True)
 
@@ -2270,6 +2315,19 @@ def _replace_protective_stop(sym, close_side, side, qty, new_stop_price, price_p
             send_telegram_msg(f"🚨🚨 <b>CRITICAL: NO STOP LOSS</b>\n\n#{sym}: new {context_label} stop AND restore both failed!\n<b>Position is NAKED — intervene immediately!</b>\nCheck <code>/positions</code>.")
             return None, placed_str
 
+    # Verify exactly one protective stop invariant
+    try:
+        active_orders = binance_futures_signed_request('GET', '/fapi/v1/openAlgoOrders', {'symbol': sym})
+        if isinstance(active_orders, list):
+            if exactly_one_protective_stop(active_orders, sym, norm_side):
+                print(f"🛡️ [STOP INVARIANT VERIFIED] #{sym} exactly 1 protective stop resting on Binance ({norm_side}).", flush=True)
+            else:
+                authoritative = choose_authoritative_stop(active_orders, sym, norm_side)
+                if authoritative:
+                    print(f"⚠️ [STOP INVARIANT AUDIT] #{sym} ({norm_side}) authoritative stop: #{authoritative.get('algoId')} at ${authoritative.get('triggerPrice')}.", flush=True)
+    except Exception:
+        pass
+
     return new_order_id, placed_str
 
 
@@ -2282,15 +2340,15 @@ def manage_active_positions_breakeven(positions=None):
     - Stage 3 (TP3 Runner @ 34%): Dynamic trailing stop walks behind price (0.7x ATR for Quick Scalps, 1.4x ATR for Trend Runners).
 
     Safeguards:
-    - If positions is None (Binance API timeout/error), reconciliation is skipped to protect active targets.
+    - Enforces require_authoritative_positions; skips reconciliation if Binance API is unavailable.
     - Validates stop prices against mark prices before cancelling existing stops to prevent -2021 errors.
     """
     global ACTIVE_POSITION_TARGETS
     try:
-        if positions is None:
-            positions = get_binance_futures_positions()
-        if positions is None:
-            print("[POSITION RECONCILIATION WARN] Could not fetch positions from Binance (API error/timeout). Skipping reconciliation to protect active targets.", flush=True)
+        try:
+            positions = require_authoritative_positions(positions if positions is not None else get_binance_futures_positions())
+        except TradingStateUnavailable:
+            print("[POSITION RECONCILIATION WARN] Authoritative Binance position data unavailable. Skipping reconciliation to protect active targets.", flush=True)
             return
 
         live_syms = set(p['symbol'] for p in positions if abs(float(p.get('positionAmt', 0.0))) > 0.0)
