@@ -11,8 +11,6 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
       - TELEGRAM_NOTIFICATIONS=true
-    ports:
-      - "8080:8080"
     volumes:
       - ./bot_output.log:/app/bot_output.log
-      - ./.env:/app/.env
+      - ./.env:/app/.env:ro
