@@ -255,18 +255,12 @@ def precompute_signals(df, window=4):
     return pad + signals
 
 
-def run_3year_synergy_backtest(initial_balance=100.0, leverage=50, margin_pct=0.03, max_positions=5, max_directional=5,
-                               fib_weight=1.0, mss_weight=1.0, ma_weight=1.0, tp1_atr=2.0, trail_atr=1.2):
-    print("=" * 95)
-    print(" 🚀 RUNNING 3-YEAR PRODUCTION + ATLAS PERFECT SYNERGY BACKTEST (2023 - 2026)")
-    print("=" * 95)
-    print(f" • Starting Balance:       ${initial_balance:,.2f} USDT")
-    print(f" • Leverage & Margin:      {leverage}x Leverage | {margin_pct*100:.1f}% Margin (Max {max_positions} Positions)")
-    print(f" • ATLAS Modules Active:   🧬 Darwinian Weights | 🛡️ Adversarial CRO | ⚖️ JANUS Regime")
-    print(f" • Initial Channel Multipliers: FIB: {fib_weight:.2f}x | MSS: {mss_weight:.2f}x | 5MA: {ma_weight:.2f}x")
-    print(f" • Target Clearances:      TP1: {tp1_atr:.1f}x ATR | Runner Trailing: {trail_atr:.1f}x ATR")
-    print(f" • Real VIP Fees:          Maker 0.018% | Taker 0.045% | Slip 0.015% | Funding 0.010% / 8h")
-    print("=" * 95)
+_DATA_CACHE = None
+
+def get_precomputed_data():
+    global _DATA_CACHE
+    if _DATA_CACHE is not None:
+        return _DATA_CACHE
 
     data_map = {}
     signals_map = {}
@@ -285,7 +279,6 @@ def run_3year_synergy_backtest(initial_balance=100.0, leverage=50, margin_pct=0.
 
     time_index = data_map['BTCUSDT']['open_time'].values
     n_bars = len(time_index)
-    print(f"[TIMELINE] Synchronized {n_bars:,} 15m bars across 36 months (2023-09 to 2026-09)\n")
 
     idx_maps = {}
     for sym in SYMBOLS:
@@ -300,6 +293,54 @@ def run_3year_synergy_backtest(initial_balance=100.0, leverage=50, margin_pct=0.
                 idx_map[i] = ptr
         idx_maps[sym] = idx_map
 
+    btc_closes = closes_map['BTCUSDT']
+    btc_indices = idx_maps['BTCUSDT']
+    btc_dump_arr = np.zeros(n_bars, dtype=bool)
+    for b_i in range(1, n_bars):
+        b_idx = btc_indices[b_i]
+        if b_idx >= 1:
+            prev_b = b_idx - 1
+            if (btc_closes[b_idx] - btc_closes[prev_b]) / btc_closes[prev_b] < -0.005:
+                btc_dump_arr[b_i] = True
+
+    _DATA_CACHE = {
+        'data_map': data_map,
+        'signals_map': signals_map,
+        'highs_map': highs_map,
+        'lows_map': lows_map,
+        'closes_map': closes_map,
+        'time_index': time_index,
+        'n_bars': n_bars,
+        'idx_maps': idx_maps,
+        'btc_dump_arr': btc_dump_arr
+    }
+    return _DATA_CACHE
+
+def run_3year_synergy_backtest(initial_balance=100.0, leverage=50, margin_pct=0.03, max_positions=5, max_directional=5,
+                               fib_weight=1.0, mss_weight=1.0, ma_weight=1.0, tp1_atr=2.0, trail_atr=1.2, quiet=False):
+    if not quiet:
+        print("=" * 95)
+        print(" 🚀 RUNNING 3-YEAR PRODUCTION + ATLAS PERFECT SYNERGY BACKTEST (2023 - 2026)")
+        print("=" * 95)
+        print(f" • Starting Balance:       ${initial_balance:,.2f} USDT")
+        print(f" • Leverage & Margin:      {leverage}x Leverage | {margin_pct*100:.1f}% Margin (Max {max_positions} Positions)")
+        print(f" • ATLAS Modules Active:   🧬 Darwinian Weights | 🛡️ Adversarial CRO | ⚖️ JANUS Regime")
+        print(f" • Initial Channel Multipliers: FIB: {fib_weight:.2f}x | MSS: {mss_weight:.2f}x | 5MA: {ma_weight:.2f}x")
+        print(f" • Target Clearances:      TP1: {tp1_atr:.1f}x ATR | Runner Trailing: {trail_atr:.1f}x ATR")
+        print(f" • Real VIP Fees:          Maker 0.018% | Taker 0.045% | Slip 0.015% | Funding 0.010% / 8h")
+        print("=" * 95)
+
+    cached = get_precomputed_data()
+    data_map = cached['data_map']
+    signals_map = cached['signals_map']
+    highs_map = cached['highs_map']
+    lows_map = cached['lows_map']
+    closes_map = cached['closes_map']
+    time_index = cached['time_index']
+    n_bars = cached['n_bars']
+    idx_maps = cached['idx_maps']
+    btc_dump_arr = cached['btc_dump_arr']
+
     balance = initial_balance
     peak_balance = initial_balance
     max_drawdown_pct = 0.0
@@ -311,16 +352,6 @@ def run_3year_synergy_backtest(initial_balance=100.0, leverage=50, margin_pct=0.
 
     initial_w = {'FIBONACCI': fib_weight, 'MSS_SHIFT': mss_weight, '5MA_CONSENSUS': ma_weight}
     darwin = AtlasDarwinianWeights(initial_weights=initial_w)
-
-    btc_closes = closes_map['BTCUSDT']
-    btc_indices = idx_maps['BTCUSDT']
-    btc_dump_arr = np.zeros(n_bars, dtype=bool)
-    for b_i in range(1, n_bars):
-        b_idx = btc_indices[b_i]
-        if b_idx >= 1:
-            prev_b = b_idx - 1
-            if (btc_closes[b_idx] - btc_closes[prev_b]) / btc_closes[prev_b] < -0.005:
-                btc_dump_arr[b_i] = True
 
     for bar_i in range(50, n_bars):
         cur_time = pd.Timestamp(time_index[bar_i])

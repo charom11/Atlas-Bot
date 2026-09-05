@@ -1935,10 +1935,8 @@ def place_binance_futures_tp_sl(symbol, side, last_price, atr, leverage=75, tota
         exchange = get_ccxt_exchange()
         ccxt_sym = to_ccxt_symbol(symbol)
         
-        # Place TP1 for scale-out size (reduceOnly=True prevents minNotional rejections on closes)
-        tp_params = {'stopPrice': float(tp1_str), 'positionSide': position_side, 'reduceOnly': True}
-        if float(tp1_qty_str) >= float(total_qty) * 0.99:
-            tp_params['closePosition'] = True
+        # Place TP1 for scale-out size (In Hedge Mode, reduceOnly cannot be sent)
+        tp_params = {'stopPrice': float(tp1_str), 'positionSide': position_side}
         tp_order = exchange.create_order(
             symbol=ccxt_sym,
             type='TAKE_PROFIT_MARKET',
@@ -1956,7 +1954,7 @@ def place_binance_futures_tp_sl(symbol, side, last_price, atr, leverage=75, tota
                     type='TAKE_PROFIT_MARKET',
                     side=close_side.lower(),
                     amount=float(tp2_qty_str),
-                    params={'stopPrice': float(tp2_str), 'positionSide': position_side, 'reduceOnly': True}
+                    params={'stopPrice': float(tp2_str), 'positionSide': position_side}
                 )
                 tp2_res = {'status': 'success', 'id': tp2_order.get('id'), 'price': tp2_str, 'qty': tp2_qty_str}
             except Exception as e2:

@@ -2110,9 +2110,8 @@ def place_binance_futures_tp_sl(symbol, side, last_price, atr, leverage=75, tota
 
     # --- Leg 1: TP1 (non-fatal if fails — we proceed without exchange-side TP) ---
     try:
-        tp_params = {'stopPrice': float(tp1_str), 'positionSide': position_side, 'reduceOnly': True}
-        if float(tp1_qty_str) >= float(total_qty) * 0.99:
-            tp_params['closePosition'] = True
+        # Note: In Hedge Mode (dualSidePosition=True), Binance rejects 'reduceOnly' with error -1106
+        tp_params = {'stopPrice': float(tp1_str), 'positionSide': position_side}
         tp_order = exchange.create_order(
             symbol=ccxt_sym, type='TAKE_PROFIT_MARKET',
             side=close_side.lower(), amount=float(tp1_qty_str), params=tp_params
@@ -2138,7 +2137,7 @@ def place_binance_futures_tp_sl(symbol, side, last_price, atr, leverage=75, tota
             tp2_order = exchange.create_order(
                 symbol=ccxt_sym, type='TAKE_PROFIT_MARKET',
                 side=close_side.lower(), amount=float(tp2_qty_str),
-                params={'stopPrice': float(tp2_str), 'positionSide': position_side, 'reduceOnly': True}
+                params={'stopPrice': float(tp2_str), 'positionSide': position_side}
             )
             tp2_res = {'status': 'success', 'id': tp2_order.get('id'), 'price': tp2_str, 'qty': tp2_qty_str}
             tp2_order_id_placed = tp2_order.get('id')
