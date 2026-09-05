@@ -1,0 +1,27 @@
+{
+  "profile_name": "ATLAS_75X_INTEGRITY",
+  "purpose": "Causal, conservative 75x validation profile. This profile does not overwrite the original optimized profile.",
+  "leverage": 75,
+  "margin_pct": 0.03,
+  "max_positions": 5,
+  "max_directional": 5,
+  "max_position_notional_usdt": 1000.0,
+  "min_position_notional_usdt": 5.0,
+  "maintenance_margin_rate": 0.005,
+  "tp1_atr": 2.2,
+  "trail_atr": 0.8,
+  "min_rr": 1.8,
+  "funding_rates_per_8h": [0.00010, 0.00030, 0.00050],
+  "entry_model": "next_bar_open",
+  "ambiguous_bar_policy": "adverse_first",
+  "liquidation_before_stops": true,
+  "drawdown_basis": "mark_to_market_equity",
+  "optimization_period": "2022-09-01 through 2024-12-31",
+  "validation_period": "2025-01-01 through 2025-12-31",
+  "out_of_sample_period": "2026-01-01 through 2026-09-30",
+  "notes": [
+    "75x leverage is intentionally preserved.",
+    "The original optimized profile remains unchanged.",
+    "TP2 and unused channel weights are intentionally excluded until their execution semantics are implemented and validated."
+  ]
+}
