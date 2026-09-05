@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Weather-Ensemble AI 30x Quant Futures Terminal</title>
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- TradingView Lightweight Charts v4.2.1 -->
+  <script src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body class="dark-theme">
+  <div class="app-container">
+    <!-- Top Header Bar -->
+    <header class="top-bar">
+      <div class="brand-section">
+        <div class="radar-pulse"></div>
+        <div class="brand-text">
+          <h1>WEATHER-ENSEMBLE AI</h1>
+          <span class="badge badge-quant">INSTITUTIONAL QUANT C2</span>
+        </div>
+      </div>
+
+      <div class="coin-selector-bar">
+        <span class="selector-label">ASSET:</span>
+        <div class="coin-pills" id="coinSelectorContainer">
+          <button class="coin-pill active" data-symbol="XRPUSDT">XRP</button>
+          <button class="coin-pill" data-symbol="BTCUSDT">BTC</button>
+          <button class="coin-pill" data-symbol="ETHUSDT">ETH</button>
+          <button class="coin-pill" data-symbol="SOLUSDT">SOL</button>
+          <button class="coin-pill" data-symbol="BNBUSDT">BNB</button>
+          <button class="coin-pill" data-symbol="XAUUSDT">XAU (Gold)</button>
+          <button class="coin-pill" data-symbol="SUIUSDT">SUI</button>
+          <button class="coin-pill" data-symbol="DOGEUSDT">DOGE</button>
+          <button class="coin-pill" data-symbol="1000PEPEUSDT">PEPE</button>
+          <button class="coin-pill" data-symbol="1000SHIBUSDT">SHIB</button>
+          <button class="coin-pill" data-symbol="ADAUSDT">ADA</button>
+          <button class="coin-pill" data-symbol="AVAXUSDT">AVAX</button>
+          <button class="coin-pill" data-symbol="NEARUSDT">NEAR</button>
+          <button class="coin-pill" data-symbol="APTUSDT">APT</button>
+          <button class="coin-pill" data-symbol="FETUSDT">FET</button>
+          <button class="coin-pill" data-symbol="RENDERUSDT">RENDER</button>
+          <button class="coin-pill" data-symbol="TIAUSDT">TIA</button>
+          <button class="coin-pill" data-symbol="DOTUSDT">DOT</button>
+          <button class="coin-pill" data-symbol="LINKUSDT">LINK</button>
+        </div>
+        <span class="selector-label" style="margin-left: 12px;">TIMEFRAME:</span>
+        <div class="coin-pills" id="timeframeSelectorContainer">
+          <button class="coin-pill" data-tf="1m">1M</button>
+          <button class="coin-pill" data-tf="3m">3M</button>
+          <button class="coin-pill active" data-tf="5m">5M</button>
+          <button class="coin-pill" data-tf="15m">15M</button>
+          <button class="coin-pill" data-tf="1h">1H</button>
+          <button class="coin-pill" data-tf="4h">4H</button>
+        </div>
+      </div>
+
+      <div class="header-controls">
+        <button id="audioToggleBtn" class="btn btn-secondary btn-sm" title="Toggle Sound Alerts">
+          🔊 Sound: ON
+        </button>
+        <div class="status-indicator live" id="engineStatusBadge">
+          <span class="dot"></span>
+          <span id="engineStatusText">ENGINE LIVE</span>
+        </div>
+        <button id="toggleEngineBtn" class="btn btn-primary btn-sm">Pause Engine</button>
+      </div>
+    </header>
+
+    <!-- Milestone Capital Floor Banner -->
+    <div class="milestone-banner" id="milestoneBanner">
+      <div class="milestone-info">
+        <span class="milestone-title">🏆 ACCOUNT MILESTONE LOCK</span>
+        <span class="milestone-details" id="milestoneDetails">Current: $14.20 | Milestone Floor: $30.00 | Next Target: $50.00</span>
+      </div>
+      <div class="milestone-progress-bar">
+        <div class="milestone-fill" id="milestoneProgressFill" style="width: 47.3%;"></div>
+      </div>
+    </div>
+
+    <!-- Main Dashboard Grid -->
+    <main class="dashboard-grid">
+      <!-- Left Column: Chart, Order Flow & Streaming Trade Tape -->
+      <section class="panel chart-panel">
+        <div class="panel-header">
+          <div class="chart-title-group">
+            <h2 id="chartAssetTitle">XRPUSDT 5M Candlestick & Spaghetti Forecast</h2>
+            <div class="live-price-tag">
+              <span id="headerAssetPrice">$1.0032</span>
+              <span class="change-tag pos" id="headerAssetChange">+1.45%</span>
+            </div>
+          </div>
+          <div class="chart-controls">
+            <span class="badge badge-outline">TradingView Engine</span>
+          </div>
+        </div>
+
+        <div class="chart-wrapper">
+          <div id="tradingviewChartContainer" style="width:100%; height:380px;"></div>
+        </div>
+
+        <!-- Real-Time Order Flow & Passive Absorption Widget -->
+        <div class="order-flow-widget" id="orderFlowWidget">
+          <div class="of-header">
+            <h3>🌊 REAL-TIME ORDER FLOW & FOOTPRINT TAPE</h3>
+            <span class="of-badge" id="ofAbsorptionBadge">NORMAL FLOW</span>
+          </div>
+          <div class="of-metrics-grid">
+            <div class="of-metric-box">
+              <span class="of-label">Aggressive Buy/Sell Delta</span>
+              <div class="delta-bar-wrapper">
+                <div class="delta-fill-bar" id="deltaFillBar" style="width: 60%; background: var(--color-bull);"></div>
+              </div>
+              <span class="of-val" id="ofDeltaText">+12.6% Net Buyer Delta</span>
+            </div>
+            <div class="of-metric-box">
+              <span class="of-label">Volume Profile POC</span>
+              <span class="of-val-highlight" id="ofPocPrice">$1.0032</span>
+            </div>
+            <div class="of-metric-box">
+              <span class="of-label">DOM Limit Wall Ratio</span>
+              <span class="of-val" id="ofDomRatio">1.25x (Buyer Wall)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ⚡ Streaming Live Trade Tape (Time & Sales) -->
+        <div class="trade-tape-widget" id="tradeTapeWidget">
+          <div class="tape-header">
+            <div class="tape-title-group">
+              <h3>⚡ STREAMING LIVE TRADE TAPE (TIME & SALES)</h3>
+              <span class="tape-velocity-badge" id="tapeVelocityBadge">⚡ 0 trades/sec</span>
+            </div>
+            <div class="tape-controls">
+              <label class="tape-filter-label">
+                <input type="checkbox" id="whaleFilterCheckbox" />
+                <span>🐳 Whales Only (≥ $5k)</span>
+              </label>
+            </div>
+          </div>
+          <div class="tape-feed-wrapper">
+            <div class="tape-feed-header">
+              <span>Time</span>
+              <span>Side</span>
+              <span>Price</span>
+              <span>Size</span>
+              <span>Total ($)</span>
+            </div>
+            <div class="tape-feed-body" id="tapeFeedBody">
+              <div class="tape-empty">Connecting to real-time Binance Trade Stream...</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Column: Live Consensus, Potato S&R & MTF Heatmap -->
+      <section class="panel metrics-panel">
+        <div class="panel-header">
+          <h2>9 Quant Pillars Confluence</h2>
+          <span class="sub-text">Threshold: ≥ 30 / 31 Models</span>
+        </div>
+
+        <div class="consensus-hero">
+          <div class="gauge-container">
+            <div class="gauge-circle" id="consensusGauge">
+              <span class="gauge-value" id="consensusValue">30</span>
+              <span class="gauge-total">/ 31</span>
+            </div>
+          </div>
+          <div class="consensus-details">
+            <div class="signal-badge-large buy" id="masterActionBadge">STRONG BUY 🟢</div>
+            <div class="consensus-stat">
+              <span>Weighted Score:</span>
+              <strong id="weightedScoreVal">34.2 pts</strong>
+            </div>
+            <div class="consensus-stat">
+              <span>SMC 4H Bias:</span>
+              <strong id="smcBiasVal" style="color:var(--color-bull);">BUYS ONLY 🏛️</strong>
+            </div>
+            <div class="consensus-stat">
+              <span>Order Flow:</span>
+              <strong id="ofStatusVal" style="color:var(--color-bull);">Confirmed 🌊</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- 🥔 "Potato" Support & Resistance Radar -->
+        <div class="potato-sr-section">
+          <div class="section-title-sm">🥔 POTATO S&R RADAR (FLOOR & CEILING)</div>
+          <div class="potato-card" id="potatoSrCard">
+            <div class="potato-header">
+              <span class="potato-badge" id="potatoStatusBadge">IN RANGE 🥔</span>
+              <span class="potato-asset" id="potatoAssetLabel">XRPUSDT</span>
+            </div>
+            <div class="potato-levels-grid">
+              <div class="potato-level-box support">
+                <span class="p-lvl-tag">FLOOR (SUPPORT 🛡️)</span>
+                <strong class="p-lvl-price" id="potatoSupportPrice">$0.9850</strong>
+              </div>
+              <div class="potato-level-box resistance">
+                <span class="p-lvl-tag">CEILING (RESISTANCE 🧱)</span>
+                <strong class="p-lvl-price" id="potatoResistancePrice">$1.0250</strong>
+              </div>
+            </div>
+            <div class="potato-slider-wrapper">
+              <div class="potato-slider-track">
+                <div class="potato-slider-marker" id="potatoSliderMarker" style="left: 50%;">🥔</div>
+              </div>
+              <div class="potato-slider-labels">
+                <span>Floor (Buy Zone)</span>
+                <span>Ceiling (Sell Zone)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ⚡ RSI + CCI Dual Divergence Confluence Widget -->
+        <div class="divergence-section" style="margin-top:0.8rem;">
+          <div class="section-title-sm">⚡ RSI + CCI DUAL DIVERGENCE RADAR</div>
+          <div class="divergence-card" id="divergenceCard" style="background:rgba(0,0,0,0.3); border:1px solid var(--bg-card-border); border-radius:var(--radius-sm); padding:0.6rem;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem;">
+              <span id="divergenceStateBadge" class="potato-badge" style="background:rgba(217,70,239,0.15); color:#d946ef; border:1px solid rgba(217,70,239,0.3);">NO DIVERGENCE</span>
+              <span style="font-size:0.68rem; color:var(--text-dim);">4H Trend Gate: <strong style="color:var(--color-bull);">ACTIVE ✅</strong></span>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
+              <div style="background:rgba(255,255,255,0.03); padding:0.4rem; border-radius:4px;">
+                <div style="font-size:0.62rem; color:var(--text-dim); font-weight:700;">RSI (14) SMOOTH MOMENTUM</div>
+                <div style="font-size:0.9rem; font-weight:800; font-family:var(--font-mono); color:var(--color-accent);" id="divRsiVal">25.4</div>
+              </div>
+              <div style="background:rgba(255,255,255,0.03); padding:0.4rem; border-radius:4px;">
+                <div style="font-size:0.62rem; color:var(--text-dim); font-weight:700;">CCI (20) FAST STAT DEVIATION</div>
+                <div style="font-size:0.9rem; font-weight:800; font-family:var(--font-mono); color:#ffb800;" id="divCciVal">-188.1</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Multi-Timeframe (MTF) Heatmap Matrix -->
+        <div class="mtf-heatmap-section">
+          <div class="section-title-sm">📊 MULTI-TIMEFRAME CONFLUENCE HEATMAP</div>
+          <div class="table-wrapper mtf-table-wrapper">
+            <table class="ledger-table mtf-table" id="mtfTable">
+              <thead>
+                <tr>
+                  <th>Coin</th>
+                  <th>5m</th>
+                  <th>15m</th>
+                  <th>1h</th>
+                  <th>4h</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="mtfTableBody">
+                <tr><td colspan="6" style="text-align:center; color:var(--text-muted);">Loading MTF matrix...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Live Binance Positions Panel -->
+      <section class="panel full-width-panel margin-top">
+        <div class="panel-header">
+          <h2>
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            Active Binance Futures Positions & Live PnL
+          </h2>
+          <div class="header-actions">
+            <button id="emergencyCloseAllBtn" class="btn btn-danger btn-sm">🚨 Emergency Close All</button>
+          </div>
+        </div>
+        <div class="table-wrapper">
+          <table class="ledger-table" id="positionsTable">
+            <thead>
+              <tr>
+                <th>Symbol</th>
+                <th>Side</th>
+                <th>Leverage</th>
+                <th>Position Size</th>
+                <th>Entry Price</th>
+                <th>Mark Price</th>
+                <th>Liquidation Price</th>
+                <th>Unrealized PnL (USDT)</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="positionsTableBody">
+              <tr>
+                <td colspan="9" style="text-align:center; color:var(--text-muted); padding:1.2rem;">No active Binance Futures open positions.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 9 Quant Pillars Model Matrix -->
+      <section class="panel full-width-panel margin-top">
+        <div class="panel-header">
+          <h2>
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            9 Quant Pillars Ensemble Matrix & Model States
+          </h2>
+          <div class="filter-pills" id="model-filter-pills">
+            <button class="pill active" data-filter="all">All 31 Quant Models</button>
+            <button class="pill" data-filter="momentum">1. Momentum (4)</button>
+            <button class="pill" data-filter="reversion">2. Mean Reversion (4)</button>
+            <button class="pill" data-filter="pairs">3. Pairs / Relative (3)</button>
+            <button class="pill" data-filter="volatility">4. Volatility (3)</button>
+            <button class="pill" data-filter="event">5. Event & Funding (3)</button>
+            <button class="pill" data-filter="ml">6. Machine Learning (4)</button>
+            <button class="pill" data-filter="timeseries">7. Time Series (3)</button>
+            <button class="pill" data-filter="factor">8. Factor Alpha (4)</button>
+            <button class="pill" data-filter="seasonality">9. Seasonality (3)</button>
+          </div>
+        </div>
+
+        <div class="models-grid" id="modelsGridContainer">
+          <!-- 31 model cards generated dynamically in app.js -->
+        </div>
+      </section>
+
+      <!-- Live Execution & Logs Panel -->
+      <section class="panel full-width-panel margin-top">
+        <div class="panel-header">
+          <h2>
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            Live Engine Output & Signal Ledger
+          </h2>
+          <span class="sub-text">Real-time scan logs from main.py</span>
+        </div>
+        <div class="console-box" id="liveConsoleStream">
+          <pre id="consoleText">Connecting to live bot engine...</pre>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

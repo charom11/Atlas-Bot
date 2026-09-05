@@ -1,0 +1,21 @@
+# ==============================================================================
+# WEATHER-ENSEMBLE QUANT TRADING BOT - PRODUCTION DEPENDENCIES
+# ==============================================================================
+
+# Core Numerical & Data Science Stack
+pandas>=1.5.0
+numpy>=1.21.0
+scipy>=1.9.0
+
+# Exchange Connectivity & REST / WebSocket API
+requests>=2.28.0
+ccxt>=3.0.0
+websocket-client>=1.6.0
+urllib3>=1.26.0
+
+# System Monitoring, Process Management & Security
+psutil>=5.9.0
+python-dotenv>=1.0.0
+
+# Terminal Dashboard UI & Logging
+rich>=13.0.0

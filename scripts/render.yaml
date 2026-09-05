@@ -1,0 +1,19 @@
+services:
+  - type: worker
+    name: weather-ensemble-bot
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: pip install -r requirements.txt && pip install rich websocket-client ccxt
+    startCommand: python main.py --trade-live --sizing-mode margin --margin-pct 0.03 --leverage 50 --threshold 30 --timeframe 15m --max-positions 5
+    envVars:
+      - key: BINANCE_API_KEY
+        sync: false
+      - key: BINANCE_API_SECRET
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: TELEGRAM_NOTIFICATIONS
+        value: "true"

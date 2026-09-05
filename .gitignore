@@ -1,0 +1,30 @@
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Virtual environments
+.venv/
+env/
+venv/
+ENV/
+
+# Sensitive environment configuration
+.env
+.env.local
+
+# Downloaded data & market CSVs
+*.csv
+data/
+
+# Logs & process files
+*.log
+bot_output.log
+
+# IDE & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
