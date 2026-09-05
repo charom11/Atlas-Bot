@@ -1,43 +1,50 @@
-name: ⚡ Weather-Ensemble AI 24/7 Live Trading Runner
+name: Atlas Bot Manual Live Session
 
 on:
-  schedule:
-    - cron: '0 */5 * * *'
   workflow_dispatch:
     inputs:
+      enable_live:
+        description: 'Explicitly authorize a live Binance Futures session'
+        required: true
+        default: false
+        type: boolean
       duration_hours:
         description: 'Session Duration (Hours)'
         required: false
         default: '5.5'
+        type: string
 
 jobs:
   trade_session:
-    name: 🚀 Live Futures Execution Session
+    name: Manual Futures Execution Session
+    if: ${{ inputs.enable_live == true }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
+    environment: production-trading
 
     steps:
-      - name: 📥 Checkout Codebase
+      - name: Checkout Codebase
         uses: actions/checkout@v4
 
-      - name: 🐍 Setup Python 3.11
+      - name: Setup Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: 📦 Install Dependencies
+      - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install rich websocket-client ccxt
+          pip install pytest rich websocket-client ccxt
 
-      - name: 🔎 Validate Trading Entrypoint
+      - name: Validate Trading Entrypoint
         run: |
           python -m py_compile main.py
           python main.py --help >/dev/null
+          python -m pytest -q tests/test_trading_safety.py
 
-      - name: ⚡ Run Weather-Ensemble AI Live Trading Agent
+      - name: Run Explicitly Authorized Live Session
         env:
           BINANCE_API_KEY: ${{ secrets.BINANCE_API_KEY }}
           BINANCE_API_SECRET: ${{ secrets.BINANCE_API_SECRET }}
@@ -45,5 +52,5 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TELEGRAM_NOTIFICATIONS: 'true'
         run: |
-          echo "Starting 24/7 Live Trading Session on GitHub Actions..."
+          echo "Starting explicitly authorized live trading session..."
           python -u main.py --trade-live --sizing-mode margin --margin-pct 0.03 --leverage 50 --threshold 30 --timeframe 15m --max-positions 5
