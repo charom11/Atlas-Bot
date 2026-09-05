@@ -27,7 +27,9 @@ from datetime import datetime, timezone
 import requests
 import numpy as np
 import pandas as pd
+from typing import Optional
 
+from strategy_consensus_v3 import evaluate_hardened_31_models
 from trading_safety import (
     TradingStateUnavailable,
     RetryDecision,
@@ -3127,156 +3129,57 @@ class WeatherEnsembleBot:
             return 'BEARISH_TRIPLE_DIVERGENCE 🔴', False, True
         return 'NO_DIVERGENCE', False, False
 
-    def evaluate_31_models(self, df):
-        if len(df) < 35:
-            return ['NEUTRAL'] * self.total_models
+    def evaluate_31_models(
+        self,
+        df: pd.DataFrame,
+        *,
+        btc_close: Optional[pd.Series] = None,
+        benchmark_close: Optional[pd.Series] = None,
+        gold_close: Optional[pd.Series] = None,
+        funding_rate: Optional[float] = None,
+        funding_change: Optional[float] = None,
+        price_returns: Optional[pd.Series] = None,
+        oi_returns: Optional[pd.Series] = None,
+        seasonality_returns: Optional[pd.Series] = None,
+        hour_utc: Optional[int] = None,
+    ) -> list[str]:
+        """
+        Hardened 31-model consensus adapter.
+        IMPORTANT:
+        - Does not place orders.
+        - Does not modify leverage, position sizing, or risk/execution plumbing.
+        - Preserves the WeatherEnsembleBot interface and fail-neutral invariants.
+        - Models without validated evidence return NEUTRAL.
+        """
+        try:
+            signals = evaluate_hardened_31_models(
+                df,
+                btc_close=btc_close,
+                benchmark_close=benchmark_close,
+                gold_close=gold_close,
+                funding_rate=funding_rate,
+                funding_change=funding_change,
+                price_returns=price_returns,
+                oi_returns=oi_returns,
+                seasonality_returns=seasonality_returns,
+                hour_utc=hour_utc,
+            )
+            # Defensive invariant: downstream consensus expects exactly 31 models.
+            if not isinstance(signals, list) or len(signals) != 31:
+                print(
+                    f"[STRATEGY ADAPTER] Invalid signal count: "
+                    f"{len(signals) if isinstance(signals, list) else type(signals)}",
+                    flush=True,
+                )
+                return ["NEUTRAL"] * 31
 
-        closes = df['close'].values
-        highs = df['high'].values
-        lows = df['low'].values
-        vols = df['volume'].values
-        last_close = closes[-1]
-        n = len(df)
-
-        signals = []
-
-        # ==============================================================================
-        # 1️⃣ Momentum Trading (4 Models)
-        # ==============================================================================
-        roc5 = (last_close - closes[-6]) / closes[-6]
-        roc15 = (last_close - closes[-16]) / closes[-16] if n >= 16 else roc5
-        signals.append('BULLISH' if (roc5 > 0.0008 and roc15 > 0.0015) else ('BEARISH' if (roc5 < -0.0008 and roc15 < -0.0015) else 'NEUTRAL'))
-
-        ema12 = pd.Series(closes).ewm(span=12, adjust=False).mean().values
-        ema26 = pd.Series(closes).ewm(span=26, adjust=False).mean().values
-        macd_line = ema12 - ema26
-        signal_line = pd.Series(macd_line).ewm(span=9, adjust=False).mean().values
-        hist = macd_line - signal_line
-        signals.append('BULLISH' if hist[-1] > hist[-2] and hist[-1] > 0 else ('BEARISH' if hist[-1] < hist[-2] and hist[-1] < 0 else 'NEUTRAL'))
-
-        rsi = self.calc_rsi(pd.Series(closes), 14).iloc[-1]
-        signals.append('BULLISH' if rsi > 54 else ('BEARISH' if rsi < 46 else 'NEUTRAL'))
-
-        ao = (pd.Series((highs + lows)/2).rolling(5).mean() - pd.Series((highs + lows)/2).rolling(34).mean()).values
-        signals.append('BULLISH' if ao[-1] > 0 and ao[-1] > ao[-2] else ('BEARISH' if ao[-1] < 0 and ao[-1] < ao[-2] else 'NEUTRAL'))
-
-        # ==============================================================================
-        # 2️⃣ Mean Reversion (4 Models)
-        # ==============================================================================
-        cum_vol = np.cumsum(vols[-20:])
-        cum_vp = np.cumsum((closes[-20:] * vols[-20:]))
-        vwap = cum_vp[-1] / (cum_vol[-1] + 1e-9)
-        std_p = np.std(closes[-20:]) + 1e-9
-        z_score = (last_close - vwap) / std_p
-        signals.append('BULLISH' if z_score < -1.2 else ('BEARISH' if z_score > 1.2 else 'NEUTRAL'))
-
-        sma20 = np.mean(closes[-20:])
-        std20 = np.std(closes[-20:]) + 1e-9
-        upper_bb = sma20 + 2 * std20
-        lower_bb = sma20 - 2 * std20
-        pct_b = (last_close - lower_bb) / (upper_bb - lower_bb + 1e-9)
-        signals.append('BULLISH' if pct_b < 0.15 else ('BEARISH' if pct_b > 0.85 else 'NEUTRAL'))
-
-        atr14 = self.calc_atr(df, 14).iloc[-1]
-        ema20_val = pd.Series(closes).ewm(span=20, adjust=False).mean().iloc[-1]
-        signals.append('BULLISH' if last_close < (ema20_val - 1.5 * atr14) else ('BEARISH' if last_close > (ema20_val + 1.5 * atr14) else 'NEUTRAL'))
-
-        hh14 = np.max(highs[-14:])
-        ll14 = np.min(lows[-14:])
-        wr = ((hh14 - last_close) / (hh14 - ll14 + 1e-9)) * -100
-        signals.append('BULLISH' if wr < -80 else ('BEARISH' if wr > -20 else 'NEUTRAL'))
-
-        # ==============================================================================
-        # 3️⃣ Pairs & Cross-Asset Relative Strength (3 Models)
-        # ==============================================================================
-        p_change = (closes[-1] - closes[-2]) / closes[-2]
-        trend_dir = 1 if closes[-1] > sma20 else -1
-        signals.append('BULLISH' if p_change * trend_dir > 0.001 else ('BEARISH' if p_change * trend_dir < -0.001 else 'NEUTRAL'))
-
-        ret_rank = (last_close - np.min(lows[-20:])) / (np.max(highs[-20:]) - np.min(lows[-20:]) + 1e-9)
-        signals.append('BULLISH' if ret_rank > 0.65 else ('BEARISH' if ret_rank < 0.35 else 'NEUTRAL'))
-
-        signals.append('BULLISH' if (closes[-1] > closes[-5] and rsi > 50) else ('BEARISH' if (closes[-1] < closes[-5] and rsi < 50) else 'NEUTRAL'))
-
-        # ==============================================================================
-        # 4️⃣ Volatility Trading (3 Models)
-        # ==============================================================================
-        log_hl = (np.log(highs[-10:] / (lows[-10:] + 1e-9))) ** 2
-        log_co = (np.log(closes[-10:] / (df['open'].values[-10:] + 1e-9))) ** 2
-        gk_vol = np.sqrt(np.mean(0.5 * log_hl - (2 * np.log(2) - 1) * log_co))
-        signals.append('BULLISH' if (gk_vol > 0.003 and last_close > closes[-3]) else ('BEARISH' if (gk_vol > 0.003 and last_close < closes[-3]) else 'NEUTRAL'))
-
-        bb_width = (upper_bb - lower_bb) / sma20
-        is_squeeze = bb_width < 0.015
-        signals.append('BULLISH' if (is_squeeze and last_close > upper_bb) else ('BEARISH' if (is_squeeze and last_close < lower_bb) else 'NEUTRAL'))
-
-        signals.append('BULLISH' if (atr14 > np.mean(highs[-20:] - lows[-20:]) and last_close > closes[-10]) else ('BEARISH' if (atr14 > np.mean(highs[-20:] - lows[-20:]) and last_close < closes[-10]) else 'NEUTRAL'))
-
-        # ==============================================================================
-        # 5️⃣ Event-Driven & Funding Microstructure (3 Models)
-        # ==============================================================================
-        signals.append('BULLISH' if (rsi > 52 and closes[-1] > closes[-3]) else ('BEARISH' if (rsi < 48 and closes[-1] < closes[-3]) else 'NEUTRAL'))
-
-        up_vols = vols[-5:][closes[-5:] >= df['open'].values[-5:]].sum()
-        dn_vols = vols[-5:][closes[-5:] < df['open'].values[-5:]].sum()
-        vol_ratio = up_vols / (dn_vols + 1e-9)
-        signals.append('BULLISH' if vol_ratio > 1.25 else ('BEARISH' if vol_ratio < 0.80 else 'NEUTRAL'))
-
-        vfi = ((closes[-1] - closes[-2]) * vols[-1]) / (atr14 + 1e-9)
-        signals.append('BULLISH' if vfi > 0.5 else ('BEARISH' if vfi < -0.5 else 'NEUTRAL'))
-
-        # ==============================================================================
-        # 6️⃣ Machine Learning Ensemble (4 Models)
-        # ==============================================================================
-        f_tree_score = (0.35 * (rsi - 50)/50) + (0.35 * (roc5/0.01)) + (0.30 * (z_score/2.0))
-        signals.append('BULLISH' if f_tree_score > 0.25 else ('BEARISH' if f_tree_score < -0.25 else 'NEUTRAL'))
-
-        lstm_drift = (closes[-1] - np.mean(closes[-8:])) / (np.std(closes[-8:]) + 1e-9)
-        signals.append('BULLISH' if lstm_drift > 0.75 else ('BEARISH' if lstm_drift < -0.75 else 'NEUTRAL'))
-
-        regime_state = 'BULLISH' if (closes[-1] > sma20 and rsi > 50) else ('BEARISH' if (closes[-1] < sma20 and rsi < 50) else 'NEUTRAL')
-        signals.append(regime_state)
-
-        mc_drift = np.mean(np.diff(closes[-10:]))
-        signals.append('BULLISH' if mc_drift > 0.0002 else ('BEARISH' if mc_drift < -0.0002 else 'NEUTRAL'))
-
-        # ==============================================================================
-        # 7️⃣ Time Series & Statistical Forecasting (3 Models)
-        # ==============================================================================
-        kf_state = 0.5 * closes[-1] + 0.3 * closes[-2] + 0.2 * closes[-3]
-        signals.append('BULLISH' if closes[-1] > kf_state else 'BEARISH')
-
-        ar3_pred = closes[-1] + 0.6 * (closes[-1] - closes[-2]) + 0.3 * (closes[-2] - closes[-3])
-        signals.append('BULLISH' if ar3_pred > closes[-1] else 'BEARISH')
-
-        fourier_phase = math.sin(len(df) * (2 * math.pi / 24))
-        signals.append('BULLISH' if fourier_phase > 0.3 and closes[-1] > closes[-5] else ('BEARISH' if fourier_phase < -0.3 and closes[-1] < closes[-5] else 'NEUTRAL'))
-
-        # ==============================================================================
-        # 8️⃣ Factor-Based Multi-Factor Alpha (4 Models)
-        # ==============================================================================
-        signals.append('BULLISH' if closes[-1] > closes[-20] else 'BEARISH')
-
-        signals.append('BULLISH' if (std20 / sma20 < 0.02 and closes[-1] > sma20) else ('BEARISH' if (std20 / sma20 < 0.02 and closes[-1] < sma20) else 'NEUTRAL'))
-
-        signals.append('BULLISH' if (abs(closes[-1] - closes[-14]) > atr14 * 1.5 and closes[-1] > closes[-14]) else ('BEARISH' if (abs(closes[-1] - closes[-14]) > atr14 * 1.5 and closes[-1] < closes[-14]) else 'NEUTRAL'))
-
-        ema50_val = pd.Series(closes).ewm(span=50, adjust=False).mean().iloc[-1]
-        signals.append('BULLISH' if closes[-1] > ema50_val else 'BEARISH')
-
-        # ==============================================================================
-        # 9️⃣ Seasonality & Session Microstructure (3 Models)
-        # ==============================================================================
-        curr_hour = datetime.now(timezone.utc).hour
-        is_london_ny = 12 <= curr_hour <= 16
-        signals.append('BULLISH' if (is_london_ny and rsi > 50) else ('BEARISH' if (is_london_ny and rsi < 50) else 'NEUTRAL'))
-
-        near_funding = curr_hour in [0, 7, 8, 15, 16, 23]
-        signals.append('BULLISH' if (near_funding and closes[-1] > closes[-3]) else ('BEARISH' if (near_funding and closes[-1] < closes[-3]) else 'NEUTRAL'))
-
-        signals.append('BULLISH' if (closes[-1] > df['open'].iloc[0]) else 'BEARISH')
-
-        return signals
+            valid = {"BULLISH", "BEARISH", "NEUTRAL"}
+            # Never allow malformed model output to become a directional vote.
+            return [s if s in valid else "NEUTRAL" for s in signals]
+        except Exception as exc:
+            # Strategy failure must not become an accidental trading signal.
+            print(f"[STRATEGY ADAPTER] Evaluation failed: {exc}", flush=True)
+            return ["NEUTRAL"] * 31
 
     def compute_weighted_consensus(self, signals):
         weights = (

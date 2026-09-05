@@ -36,9 +36,11 @@ def test_missing_external_data_stays_neutral():
 
 
 def test_cross_asset_signal_uses_supplied_benchmark():
-    asset = pd.Series(np.linspace(100, 130, 120))
-    benchmark = pd.Series(np.linspace(100, 101, 120))
+    benchmark = pd.Series(np.linspace(100.0, 102.0, 120))
+    asset = 100.0 + 1.8 * (benchmark - 100.0)
+    asset.iloc[-1] += 2.0
     df = make_df(120, 0.0001)
     df['close'] = asset
     signals = evaluate_hardened_31_models(df, btc_close=benchmark)
     assert signals[8] == BULLISH
+
