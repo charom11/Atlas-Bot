@@ -2,7 +2,6 @@ name: ⚡ Weather-Ensemble AI 24/7 Live Trading Runner
 
 on:
   schedule:
-    # Triggers every 5 hours to ensure continuous 24/7 coverage
     - cron: '0 */5 * * *'
   workflow_dispatch:
     inputs:
@@ -15,7 +14,7 @@ jobs:
   trade_session:
     name: 🚀 Live Futures Execution Session
     runs-on: ubuntu-latest
-    timeout-minutes: 360 # GitHub maximum job limit (6 hours)
+    timeout-minutes: 360
 
     steps:
       - name: 📥 Checkout Codebase
@@ -33,6 +32,11 @@ jobs:
           pip install -r requirements.txt
           pip install rich websocket-client ccxt
 
+      - name: 🔎 Validate Trading Entrypoint
+        run: |
+          python -m py_compile main.py
+          python main.py --help >/dev/null
+
       - name: ⚡ Run Weather-Ensemble AI Live Trading Agent
         env:
           BINANCE_API_KEY: ${{ secrets.BINANCE_API_KEY }}
@@ -42,4 +46,4 @@ jobs:
           TELEGRAM_NOTIFICATIONS: 'true'
         run: |
           echo "Starting 24/7 Live Trading Session on GitHub Actions..."
-          python -u weather_ensemble_bot.py --trade-live --sizing-mode margin --margin-pct 0.03 --leverage 50 --threshold 30 --timeframe 15m --max-positions 5
+          python -u main.py --trade-live --sizing-mode margin --margin-pct 0.03 --leverage 50 --threshold 30 --timeframe 15m --max-positions 5
