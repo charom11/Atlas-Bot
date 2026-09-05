@@ -2863,7 +2863,7 @@ QUANT_PILLAR_WEIGHTS = {
 }
 
 class WeatherEnsembleBot:
-    def __init__(self, consensus_threshold=30, live_trading=False, trade_usdt=None, margin_pct=0.03, sizing_mode="margin", leverage=75, timeframe="15m", max_positions=5, directional_cap=5):
+    def __init__(self, consensus_threshold=30, live_trading=False, trade_usdt=None, margin_pct=0.03, sizing_mode="margin", leverage=75, timeframe="15m", max_positions=5, directional_cap=5, max_scalp_slots=None, scalp_cap_enabled=True):
         self.threshold = consensus_threshold
         self.timeframe = timeframe # '1m', '3m', '5m', '15m', '1h', '4h'
         self.total_models = len(MODEL_NAMES)
@@ -2872,8 +2872,10 @@ class WeatherEnsembleBot:
         self.margin_pct = margin_pct
         self.sizing_mode = sizing_mode
         self.leverage = leverage
-        self.max_active_positions = max_positions  # Max 5 concurrent positions
-        self.max_directional_cap = directional_cap  # Max 5 same-direction positions
+        self.max_active_positions = max_positions  # Max concurrent positions
+        self.max_directional_cap = directional_cap  # Max same-direction positions
+        self.max_scalp_slots = max_scalp_slots
+        self.scalp_cap_enabled = scalp_cap_enabled
         self.paused = False
         self.ledger = []
         self.last_notified_bars = {}
@@ -3307,11 +3309,22 @@ class WeatherEnsembleBot:
         time_since_trade = time.time() - last_traded_ts
         is_in_cooldown = time_since_trade < dynamic_cooldown_sec
 
-        # Distinct Position Slots: Max 2 Scalps, Max 3 Swings
+        # Distinct Position Slots: Quick Scalp vs Swing Trade (Can be toggled or scaled)
         scalp_active = sum(1 for s, t in ACTIVE_POSITION_TARGETS.items() if t.get('is_quick_scalp'))
         swing_active = sum(1 for s, t in ACTIVE_POSITION_TARGETS.items() if not t.get('is_quick_scalp'))
-        max_scalp_slots = 2
-        max_swing_slots = 3
+        if not getattr(self, 'scalp_cap_enabled', True):
+            # Scalp Cap is OFF: Unified pool, any setup can take any free slot up to max_active_positions
+            max_scalp_slots = self.max_active_positions
+            max_swing_slots = self.max_active_positions
+        else:
+            configured_scalp = getattr(self, 'max_scalp_slots', None)
+            if configured_scalp is not None:
+                max_scalp_slots = configured_scalp
+                max_swing_slots = max(1, self.max_active_positions - max_scalp_slots + 1)
+            else:
+                # Dynamic scaling with max_active_positions instead of fixed 2 (e.g. 3 of 5, or 6 of 10)
+                max_scalp_slots = max(2, int(self.max_active_positions * 0.6))
+                max_swing_slots = max(2, self.max_active_positions - max_scalp_slots + 1)
 
         trade_channel = 'CONSENSUS'
         if not self.paused and not CIRCUIT_BREAKER.circuit_tripped and active_count < self.max_active_positions and not is_in_cooldown:
@@ -3746,6 +3759,7 @@ class WeatherEnsembleBot:
                     f"• <b>/clean</b> - Manually purge leftover/orphaned orders.\n"
                     f"• <b>/closeall</b> - Emergency market close all open positions.\n"
                     f"• <b>/tf &lt;1m|3m|5m|15m|1h|4h&gt;</b> - Change execution timeframe.\n"
+                    f"• <b>/scalpslots &lt;on|off|N&gt;</b> - Turn scalp slot cap on/off or set limit (e.g. <code>/scalpslots off</code>).\n"
                     f"• <b>/ip</b> - View current public IP, whitelist status & Binance connection.\n"
                     f"• <b>/setip &lt;ip&gt;</b> - Update whitelisted IP in bot & .env (e.g. <code>/setip 112.210.251.121</code>).\n"
                     f"• <b>/models</b> - Real-time consensus breakdown for all 14 coins.\n"
@@ -3976,11 +3990,66 @@ class WeatherEnsembleBot:
                     val = int(parts[1])
                     if 1 <= val <= 20:
                         self.max_active_positions = val
-                        send_telegram_msg(f"✅ <b>Max Active Positions updated to {self.max_active_positions}!</b>", reply_markup=get_telegram_inline_keyboard(self.live_trading), chat_id=chat_id)
+                        calc_scalp = self.max_scalp_slots if (self.max_scalp_slots and self.max_scalp_slots <= val) else max(2, int(val * 0.6))
+                        send_telegram_msg(f"✅ <b>Max Active Positions updated to {self.max_active_positions}!</b> (Scalp slots: {calc_scalp})", reply_markup=get_telegram_inline_keyboard(self.live_trading), chat_id=chat_id)
                     else:
                         send_telegram_msg("⚠️ Max active positions must be between 1 and 20.", chat_id=chat_id)
                 else:
                     send_telegram_msg(f"ℹ️ Current Max Active Positions: <b>{self.max_active_positions}</b>\nUsage: <code>/maxpos 8</code>", reply_markup=get_telegram_inline_keyboard(self.live_trading), chat_id=chat_id)
+
+            elif cmd in ['/scalpcap', '/scalpslots', '/scalps', '/quickscalp']:
+                if len(parts) > 1:
+                    arg = parts[1].lower().strip()
+                    if arg in ['off', 'disable', 'disabled', '0', 'none']:
+                        self.scalp_cap_enabled = False
+                        send_telegram_msg(
+                            f"🔓 <b>QUICK SCALP SLOT CAP TURNED OFF</b>\n\n"
+                            f"• <b>Status:</b> Unified Position Pool (Cap Disabled ⚪)\n"
+                            f"• <b>Behavior:</b> Quick Scalps & Swing Trades can both take any open slot up to <b>{self.max_active_positions} total positions</b>.\n"
+                            f"• <i>No setups will be blocked by 'Max Quick Scalp slots reached'.</i>",
+                            reply_markup=get_telegram_inline_keyboard(self.live_trading), chat_id=chat_id
+                        )
+                    elif arg in ['on', 'enable', 'enabled']:
+                        self.scalp_cap_enabled = True
+                        calc_slots = self.max_scalp_slots or max(2, int(self.max_active_positions * 0.6))
+                        send_telegram_msg(
+                            f"🔒 <b>QUICK SCALP SLOT CAP TURNED ON</b>\n\n"
+                            f"• <b>Status:</b> Enforced Slot Protection (Cap Enabled 🟢)\n"
+                            f"• <b>Max Quick Scalp Slots:</b> <b>{calc_slots}</b> of {self.max_active_positions} total\n"
+                            f"• <i>Preserves remaining slots for high-conviction macro Swing Trades.</i>\n\n"
+                            f"💡 <i>To change limit:</i> <code>/scalpslots 4</code> or <code>/scalpslots off</code>",
+                            reply_markup=get_telegram_inline_keyboard(self.live_trading), chat_id=chat_id
+                        )
+                    elif arg.isdigit():
+                        val = int(arg)
+                        if 1 <= val <= self.max_active_positions:
+                            self.scalp_cap_enabled = True
+                            self.max_scalp_slots = val
+                            send_telegram_msg(
+                                f"✅ <b>QUICK SCALP SLOTS UPDATED!</b>\n\n"
+                                f"• <b>Max Quick Scalp Slots:</b> <b>{self.max_scalp_slots}</b> / {self.max_active_positions}\n"
+                                f"• <b>Status:</b> Slot Protection Active 🟢",
+                                reply_markup=get_telegram_inline_keyboard(self.live_trading), chat_id=chat_id
+                            )
+                        else:
+                            send_telegram_msg(f"⚠️ Scalp slots must be between 1 and {self.max_active_positions}.", chat_id=chat_id)
+                    else:
+                        send_telegram_msg("Usage: <code>/scalpslots off</code>, <code>/scalpslots on</code>, or <code>/scalpslots 3</code>", chat_id=chat_id)
+                else:
+                    curr_status = "ENABLED 🟢" if getattr(self, 'scalp_cap_enabled', True) else "DISABLED ⚪ (Unified Pool)"
+                    curr_slots = getattr(self, 'max_scalp_slots', None) or max(2, int(self.max_active_positions * 0.6))
+                    scalp_cnt = sum(1 for s, t in ACTIVE_POSITION_TARGETS.items() if t.get('is_quick_scalp'))
+                    msg = (
+                        f"⚡ <b>QUICK SCALP SLOT STATUS</b>\n\n"
+                        f"• <b>Slot Cap:</b> {curr_status}\n"
+                        f"• <b>Active Scalps:</b> {scalp_cnt} / {curr_slots if self.scalp_cap_enabled else self.max_active_positions}\n"
+                        f"• <b>Total Max Positions:</b> {self.max_active_positions}\n\n"
+                        f"<b>Commands:</b>\n"
+                        f"• <code>/scalpslots off</code> - Disable limit (allow unlimited scalps up to maxpos)\n"
+                        f"• <code>/scalpslots on</code> - Enable slot limit\n"
+                        f"• <code>/scalpslots N</code> - Set specific scalp slots (e.g. <code>/scalpslots 4</code>)"
+                    )
+                    send_telegram_msg(msg, reply_markup=get_telegram_inline_keyboard(self.live_trading), chat_id=chat_id)
 
             elif cmd in ['/dircap', '/directionalcap', '/directional_cap', '/maxdir', '/sidecap', '/cap']:
                 if len(parts) > 1 and parts[1].isdigit():
@@ -4128,6 +4197,8 @@ def main():
     parser.add_argument('--timeframe', type=str, default='15m', help='Execution timeframe (default 15m)')
     parser.add_argument('--max-positions', type=int, default=5, help='Max concurrent positions (default 5)')
     parser.add_argument('--directional-cap', type=int, default=5, help='Max same-side positions (default 5)')
+    parser.add_argument('--max-scalp-slots', type=int, default=None, help='Max concurrent quick scalp slots (default dynamic)')
+    parser.add_argument('--disable-scalp-cap', action='store_true', help='Disable distinct quick scalp slot limit')
     args = parser.parse_args()
 
     bot = WeatherEnsembleBot(
@@ -4139,7 +4210,9 @@ def main():
         leverage=args.leverage,
         timeframe=args.timeframe,
         max_positions=args.max_positions,
-        directional_cap=args.directional_cap
+        directional_cap=args.directional_cap,
+        max_scalp_slots=args.max_scalp_slots,
+        scalp_cap_enabled=(not args.disable_scalp_cap)
     )
     while True:
         try:
