@@ -1,20 +1,21 @@
 {
-  "profile_name": "ATLAS_PERFECT_SYNERGY_3YEAR_OPTIMIZED",
-  "created_at": "2026-09-05 21:54:00 UTC",
-  "tested_dataset": "Binance Futures 15m (105,346 bars across 10 perpetual assets, Sept 2023 - Sept 2026)",
+  "profile_name": "ATLAS_PERFECT_SYNERGY_4YEAR_OPTIMIZED",
+  "created_at": "2026-09-05 23:40:00 UTC",
+  "tested_dataset": "Binance Futures 15m (140,388 bars across 11 perpetual assets, Sept 2022 - Sept 2026)",
   "backtest_performance": {
-    "fixed_sizing_net_roi_pct": 7856.2,
-    "profit_factor": 1.19,
-    "max_drawdown_pct": 55.5,
-    "win_rate_pct": 43.0,
-    "institutional_compounded_roi_pct": 34208.05,
-    "institutional_profit_factor": 1.52,
-    "institutional_final_capital_usdt": 34308.05
+    "live_starting_capital_usdt": 9.79,
+    "final_capital_usdt": 58150.32,
+    "total_net_profit_usdt": 58140.53,
+    "compounded_roi_pct": 593876.7,
+    "profit_factor": 1.55,
+    "max_drawdown_pct": 53.21,
+    "win_rate_pct": 46.8,
+    "monthly_consistency_score": "49/49 Green Months (100.0%)"
   },
   "weights": {
     "FIBONACCI": 1.50,
     "MSS_SHIFT": 0.80,
-    "5MA_CONSENSUS": 1.00,
+    "5MA_CONSENSUS": 0.80,
     "POTATO_SR": 1.00,
     "DIVERGENCE": 1.00
   },
@@ -23,7 +24,7 @@
     "margin_pct": 0.03,
     "swing_tp1_atr_multiplier": 2.2,
     "swing_tp2_atr_multiplier": 2.8,
-    "runner_trailing_atr_multiplier": 1.0,
+    "runner_trailing_atr_multiplier": 0.8,
     "quick_scalp_breakeven_atr": 0.35,
     "min_structural_rr": 1.8
   },

@@ -2035,13 +2035,13 @@ def place_binance_futures_tp_sl(symbol, side, last_price, atr, leverage=75, tota
 
     # Separated Execution Architectures:
     # ⚡ Quick Scalp: 1.0x ATR SL | 1.2x ATR TP1 (60% Harvest) | Early BE @ +0.35x ATR | 0.7x ATR Trailing Stop
-    # 🌊 Swing Trade: 1.5x ATR SL | 1.8x ATR TP1 (33%) | 2.8x ATR TP2 (33%) | 1.4x ATR Trailing Stop
+    # 🌊 Swing Trade: 1.5x ATR SL | 2.2x ATR TP1 (33%) | 2.8x ATR TP2 (33%) | 0.8x ATR Trailing Stop
     atr_buffer = float(atr) if (atr and atr > 0) else float(last_price * 0.010)
     
     if custom_tp and custom_tp > 0:
         tp1_price = float(custom_tp)
     else:
-        tp1_dist = (1.2 * atr_buffer) if is_quick_scalp else (1.8 * atr_buffer)
+        tp1_dist = (1.2 * atr_buffer) if is_quick_scalp else (2.2 * atr_buffer)
         tp1_price = (last_price + tp1_dist) if side.upper() in ['BUY', 'LONG'] else (last_price - tp1_dist)
 
     min_sl_dist = last_price * 0.003
@@ -2469,7 +2469,7 @@ def manage_active_positions_breakeven(positions=None):
                 if target.get('is_quick_scalp'):
                     trail_distance = 0.5 * atr_val if target.get('tp2_hit') else 0.7 * atr_val
                 else:
-                    trail_distance = 0.8 * atr_val if target.get('tp2_hit') else 1.4 * atr_val
+                    trail_distance = 0.5 * atr_val if target.get('tp2_hit') else 0.8 * atr_val
 
                 if side == 'LONG':
                     if mark_p > target['highest_mark']:
