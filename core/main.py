@@ -2550,7 +2550,7 @@ QUANT_PILLAR_WEIGHTS = {
 }
 
 class WeatherEnsembleBot:
-    def __init__(self, consensus_threshold=30, live_trading=False, trade_usdt=None, margin_pct=0.03, sizing_mode="margin", leverage=75, timeframe="15m", max_positions=5, directional_cap=3):
+    def __init__(self, consensus_threshold=30, live_trading=False, trade_usdt=None, margin_pct=0.03, sizing_mode="margin", leverage=75, timeframe="15m", max_positions=5, directional_cap=5):
         self.threshold = consensus_threshold
         self.timeframe = timeframe # '1m', '3m', '5m', '15m', '1h', '4h'
         self.total_models = len(MODEL_NAMES)
@@ -2560,7 +2560,7 @@ class WeatherEnsembleBot:
         self.sizing_mode = sizing_mode
         self.leverage = leverage
         self.max_active_positions = max_positions  # Max 5 concurrent positions
-        self.max_directional_cap = directional_cap  # Max 3 same-direction positions
+        self.max_directional_cap = directional_cap  # Max 5 same-direction positions
         self.paused = False
         self.ledger = []
         self.last_notified_bars = {}
@@ -3760,7 +3760,7 @@ def main():
     parser.add_argument('--threshold', type=int, default=30, help='Consensus threshold (default 30/31)')
     parser.add_argument('--timeframe', type=str, default='15m', help='Execution timeframe (default 15m)')
     parser.add_argument('--max-positions', type=int, default=5, help='Max concurrent positions (default 5)')
-    parser.add_argument('--directional-cap', type=int, default=3, help='Max same-side positions (default 3)')
+    parser.add_argument('--directional-cap', type=int, default=5, help='Max same-side positions (default 5)')
     args = parser.parse_args()
 
     bot = WeatherEnsembleBot(

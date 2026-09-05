@@ -26,7 +26,7 @@ cd /d "%~dp0.."
 echo [%date% %time%] [WATCHDOG] Booting Weather-Ensemble AI Live Daemon...
 
 :: Run the Live Bot with auto-healing
-"%~dp0..\.venv\Scripts\python.exe" -u main.py --trade-live --sizing-mode margin --margin-pct 0.03 --leverage 75 --threshold 30 --timeframe 15m --max-positions 5
+"%~dp0..\.venv\Scripts\python.exe" -u main.py --trade-live --sizing-mode margin --margin-pct 0.03 --leverage 75 --threshold 30 --timeframe 15m --max-positions 5 --directional-cap 5
 
 echo.
 echo ⚠️ [%date% %time%] [WATCHDOG WARNING] Bot process exited or disconnected!

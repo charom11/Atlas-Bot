@@ -255,7 +255,7 @@ def precompute_signals(df, window=4):
     return pad + signals
 
 
-def run_3year_synergy_backtest(initial_balance=100.0, leverage=50, margin_pct=0.03, max_positions=5, max_directional=3,
+def run_3year_synergy_backtest(initial_balance=100.0, leverage=50, margin_pct=0.03, max_positions=5, max_directional=5,
                                fib_weight=1.0, mss_weight=1.0, ma_weight=1.0, tp1_atr=2.0, trail_atr=1.2):
     print("=" * 95)
     print(" 🚀 RUNNING 3-YEAR PRODUCTION + ATLAS PERFECT SYNERGY BACKTEST (2023 - 2026)")
@@ -581,12 +581,28 @@ def run_3year_synergy_backtest(initial_balance=100.0, leverage=50, margin_pct=0.
     print(f" Monthly Consistency Score: {green_m}/{len(sorted_months)} Green Months ({(green_m/len(sorted_months)*100):.1f}%)")
     print("=" * 95)
 
+    return {
+        'initial_balance': initial_balance,
+        'final_balance': balance,
+        'net_profit': tot_pnl,
+        'total_roi': total_roi,
+        'annual_roi': ann_roi,
+        'profit_factor': pf,
+        'win_rate': win_rate,
+        'trades': n_trades,
+        'wins': len(wins),
+        'losses': len(losses),
+        'max_drawdown': max_drawdown_pct,
+        'green_months': f"{green_m}/{len(sorted_months)}"
+    }
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="3-Year Synergy Backtest")
     parser.add_argument("--balance", type=float, default=100.0)
     parser.add_argument("--leverage", type=int, default=50)
     parser.add_argument("--margin-pct", type=float, default=0.03)
     parser.add_argument("--max-positions", type=int, default=5)
+    parser.add_argument("--directional-cap", type=int, default=5)
     parser.add_argument("--fib-weight", type=float, default=1.0)
     parser.add_argument("--mss-weight", type=float, default=1.0)
     parser.add_argument("--ma-weight", type=float, default=1.0)
@@ -599,6 +615,7 @@ if __name__ == '__main__':
         leverage=args.leverage,
         margin_pct=args.margin_pct,
         max_positions=args.max_positions,
+        max_directional=args.directional_cap,
         fib_weight=args.fib_weight,
         mss_weight=args.mss_weight,
         ma_weight=args.ma_weight,

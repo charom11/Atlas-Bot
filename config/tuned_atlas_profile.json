@@ -30,7 +30,7 @@
   "risk_controls": {
     "adversarial_cro_ema_atr_limit": 2.8,
     "adx_anti_chop_threshold": 22.0,
-    "directional_cap": 3,
+    "directional_cap": 5,
     "max_active_positions": 5
   }
 }

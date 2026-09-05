@@ -287,8 +287,8 @@ class WebDashboardHandler(BaseHTTPRequestHandler):
         leverage = params.get('leverage', 50)
         threshold = params.get('threshold', 30)
         timeframe = params.get('timeframe', '15m')
-        max_positions = params.get('max_positions', 8)
-        directional_cap = params.get('directional_cap', 4)
+        max_positions = params.get('max_positions', 5)
+        directional_cap = params.get('directional_cap', 5)
 
         if BOT_PROCESS is None or BOT_PROCESS.poll() is not None:
             py_exec = get_python_executable()

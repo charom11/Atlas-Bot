@@ -1886,9 +1886,9 @@ def _load_entry_timestamps():
     except Exception as e:
         print(f"[ENTRY COOLDOWNS LOAD WARN] {e}", flush=True)
 
-def check_directional_portfolio_cap(symbol, target_side, max_same_dir=3, positions=None, *args, **kwargs):
+def check_directional_portfolio_cap(symbol, target_side, max_same_dir=5, positions=None, *args, **kwargs):
     """
-    Caps total open positions in the same direction at max 3 across the entire portfolio.
+    Caps total open positions in the same direction at max 5 across the entire portfolio.
     Positions where Stop-Loss has already shifted to Breakeven (risk-free) do not count against the cap.
     Enforces a 15-minute inter-trade cooldown between same-direction new entries.
     BUG-8 Fix: Accepts pre-fetched positions to avoid redundant REST calls.
@@ -2798,7 +2798,7 @@ QUANT_PILLAR_WEIGHTS = {
 }
 
 class WeatherEnsembleBot:
-    def __init__(self, consensus_threshold=30, live_trading=False, trade_usdt=None, margin_pct=0.03, sizing_mode="margin", leverage=75, timeframe="15m", max_positions=5, directional_cap=3):
+    def __init__(self, consensus_threshold=30, live_trading=False, trade_usdt=None, margin_pct=0.03, sizing_mode="margin", leverage=75, timeframe="15m", max_positions=5, directional_cap=5):
         self.threshold = consensus_threshold
         self.timeframe = timeframe # '1m', '3m', '5m', '15m', '1h', '4h'
         self.total_models = len(MODEL_NAMES)
@@ -2808,7 +2808,7 @@ class WeatherEnsembleBot:
         self.sizing_mode = sizing_mode
         self.leverage = leverage
         self.max_active_positions = max_positions  # Max 5 concurrent positions
-        self.max_directional_cap = directional_cap  # Max 3 same-direction positions
+        self.max_directional_cap = directional_cap  # Max 5 same-direction positions
         self.paused = False
         self.ledger = []
         self.last_notified_bars = {}
@@ -4010,7 +4010,7 @@ def main():
     parser.add_argument('--threshold', type=int, default=30, help='Consensus threshold (default 30/31)')
     parser.add_argument('--timeframe', type=str, default='15m', help='Execution timeframe (default 15m)')
     parser.add_argument('--max-positions', type=int, default=5, help='Max concurrent positions (default 5)')
-    parser.add_argument('--directional-cap', type=int, default=3, help='Max same-side positions (default 3)')
+    parser.add_argument('--directional-cap', type=int, default=5, help='Max same-side positions (default 5)')
     args = parser.parse_args()
 
     bot = WeatherEnsembleBot(
