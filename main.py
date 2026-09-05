@@ -123,6 +123,33 @@ BINANCE_API_KEY = os.getenv('BINANCE_API_KEY', '').strip().strip('"').strip("'")
 BINANCE_API_SECRET = os.getenv('BINANCE_API_SECRET', '').strip().strip('"').strip("'")
 BINANCE_WHITELISTED_IP = os.getenv('BINANCE_WHITELISTED_IP', '').strip()
 
+def update_env_file(key, value, env_file='.env'):
+    """Updates or appends a key-value pair in .env file safely and syncs os.environ."""
+    try:
+        lines = []
+        key_found = False
+        if os.path.exists(env_file):
+            with open(env_file, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+        new_lines = []
+        for line in lines:
+            if line.strip().startswith(f"{key}=") or line.strip().startswith(f"{key} ="):
+                new_lines.append(f"{key}={value}\n")
+                key_found = True
+            else:
+                new_lines.append(line)
+        if not key_found:
+            if new_lines and not new_lines[-1].endswith('\n'):
+                new_lines.append('\n')
+            new_lines.append(f"{key}={value}\n")
+        with open(env_file, 'w', encoding='utf-8') as f:
+            f.writelines(new_lines)
+        os.environ[key] = str(value)
+        return True
+    except Exception as e:
+        print(f"[ENV UPDATE ERROR] Failed to update {key} in {env_file}: {e}", flush=True)
+        return False
+
 # --------------------------------------------------------------------------
 # 🌐 Binance IP Whitelist Watchdog & Alert Engine
 # --------------------------------------------------------------------------
@@ -130,14 +157,15 @@ _LAST_IP_ALERT_TIME = 0
 _LAST_KNOWN_PUBLIC_IP = None
 _LAST_PERIODIC_IP_CHECK = 0
 
-def get_current_public_ip():
-    """Fetches this machine's public egress IP address from redundant resolvers"""
+def get_current_public_ip(notify_if_changed=True):
+    """Fetches this machine's public egress IP address from redundant resolvers and detects dynamic IP changes"""
     global _LAST_KNOWN_PUBLIC_IP
     resolvers = [
         'https://api.ipify.org?format=json',
         'https://ifconfig.me/all.json',
         'https://api.my-ip.io/ip'
     ]
+    fetched_ip = None
     for url in resolvers:
         try:
             r = requests.get(url, timeout=4)
@@ -148,21 +176,55 @@ def get_current_public_ip():
                 else:
                     ip = r.text.strip()
                 if ip and len(ip.split('.')) == 4:
-                    _LAST_KNOWN_PUBLIC_IP = ip
-                    return ip
+                    fetched_ip = ip.strip()
+                    break
         except Exception:
             continue
+
+    if fetched_ip:
+        old_ip = _LAST_KNOWN_PUBLIC_IP
+        if notify_if_changed and old_ip is not None and fetched_ip != old_ip and old_ip != "Unknown IP":
+            print(f"\n🌐 🚨 [PUBLIC IP CHANGE DETECTED] Server IP changed: {old_ip} -> {fetched_ip}!", flush=True)
+            whitelisted_cfg = os.getenv('BINANCE_WHITELISTED_IP', BINANCE_WHITELISTED_IP).strip()
+
+            # Immediately notify on Telegram
+            change_msg = (
+                f"🌐 🚨 <b>PUBLIC IP CHANGE DETECTED!</b> 🚨\n\n"
+                f"Your trading server's public IP has changed:\n"
+                f"• <b>Previous IP:</b> <code>{old_ip}</code>\n"
+                f"• <b>New Current IP:</b> <code>{fetched_ip}</code>\n"
+                f"• <b>Configured Whitelist:</b> <code>{whitelisted_cfg or 'None'}</code>\n\n"
+                f"⚠️ <b>Action Required on Binance:</b>\n"
+                f"If your Binance API key enforces IP Access Restrictions, update it now:\n"
+                f"1. Open Binance ➔ <b>API Management</b>\n"
+                f"2. Add <code>{fetched_ip}</code> to your Whitelist.\n\n"
+                f"💡 <i>To update the bot's configured IP from Telegram, reply:</i>\n"
+                f"<code>/setip {fetched_ip}</code>"
+            )
+            send_telegram_msg(change_msg)
+
+            # Check if Binance rejects with -2015
+            acc_test = binance_futures_signed_request('GET', '/fapi/v2/account')
+            if isinstance(acc_test, dict) and acc_test.get('code') == -2015:
+                trigger_ip_whitelist_alert(
+                    f"New IP ({fetched_ip}) is not yet authorized on Binance API (-2015)",
+                    current_ip=fetched_ip
+                )
+
+        _LAST_KNOWN_PUBLIC_IP = fetched_ip
+        return fetched_ip
+
     return _LAST_KNOWN_PUBLIC_IP or "Unknown IP"
 
 def trigger_ip_whitelist_alert(error_msg, current_ip=None):
     """Broadcasts a high-priority Telegram alert if current IP is not on Binance Whitelist"""
     global _LAST_IP_ALERT_TIME
     now = time.time()
-    if now - _LAST_IP_ALERT_TIME < 600:  # 10-minute cooldown against spam
+    if now - _LAST_IP_ALERT_TIME < 300:  # 5-minute cooldown against spam
         return
     _LAST_IP_ALERT_TIME = now
 
-    ip_str = current_ip or get_current_public_ip()
+    ip_str = current_ip or get_current_public_ip(notify_if_changed=False)
     whitelisted_cfg = os.getenv('BINANCE_WHITELISTED_IP', BINANCE_WHITELISTED_IP).strip()
 
     print(f"\n🚨 [BINANCE IP WHITELIST ALERT] Current IP ({ip_str}) is NOT authorized! Error: {error_msg}\n", flush=True)
@@ -177,7 +239,9 @@ def trigger_ip_whitelist_alert(error_msg, current_ip=None):
         f"👉 <b>Action Required:</b>\n"
         f"1. Log into your Binance Account ➔ <b>API Management</b>.\n"
         f"2. Add <code>{ip_str}</code> to the IP Access Restriction whitelist.\n"
-        f"3. Confirm 'Enable Futures' is checked."
+        f"3. Confirm 'Enable Futures' is checked.\n\n"
+        f"💡 <i>To update the bot's configured IP directly from Telegram, reply:</i>\n"
+        f"<code>/setip {ip_str}</code>"
     )
     send_telegram_msg(msg)
 
@@ -188,7 +252,7 @@ def check_binance_ip_whitelist(probe_api=False):
     Returns (is_valid: bool, current_ip: str)
     """
     whitelisted_cfg = os.getenv('BINANCE_WHITELISTED_IP', BINANCE_WHITELISTED_IP).strip()
-    current_ip = get_current_public_ip()
+    current_ip = get_current_public_ip(notify_if_changed=True)
 
     if whitelisted_cfg:
         allowed = [ip.strip() for ip in whitelisted_cfg.split(',') if ip.strip()]
@@ -206,6 +270,8 @@ def check_binance_ip_whitelist(probe_api=False):
                 acc_test.get('msg', 'Invalid API-key, IP, or permissions for action'),
                 current_ip=current_ip
             )
+            return False, current_ip
+        elif isinstance(acc_test, dict) and 'code' in acc_test and acc_test['code'] != 200:
             return False, current_ip
 
     return True, current_ip
@@ -3650,6 +3716,7 @@ class WeatherEnsembleBot:
         t.start()
 
     def handle_telegram_command(self, text, chat_id=None):
+        global BINANCE_WHITELISTED_IP
         try:
             parts = text.strip().split()
             if not parts:
@@ -3679,6 +3746,8 @@ class WeatherEnsembleBot:
                     f"• <b>/clean</b> - Manually purge leftover/orphaned orders.\n"
                     f"• <b>/closeall</b> - Emergency market close all open positions.\n"
                     f"• <b>/tf &lt;1m|3m|5m|15m|1h|4h&gt;</b> - Change execution timeframe.\n"
+                    f"• <b>/ip</b> - View current public IP, whitelist status & Binance connection.\n"
+                    f"• <b>/setip &lt;ip&gt;</b> - Update whitelisted IP in bot & .env (e.g. <code>/setip 112.210.251.121</code>).\n"
                     f"• <b>/models</b> - Real-time consensus breakdown for all 14 coins.\n"
                     f"• <b>/threshold N</b> - Set consensus threshold (e.g. <code>/threshold 30</code>).\n"
                     f"• <b>/pause</b> / <b>/resume</b> - Pause or resume automated entries."
@@ -3740,18 +3809,67 @@ class WeatherEnsembleBot:
                 )
                 send_telegram_msg(msg, reply_markup=get_telegram_inline_keyboard(self.live_trading), chat_id=chat_id)
 
+            elif cmd in ['/setip', '/updateip']:
+                if len(parts) < 2:
+                    cur_ip = get_current_public_ip(notify_if_changed=False)
+                    whitelisted_cfg = os.getenv('BINANCE_WHITELISTED_IP', BINANCE_WHITELISTED_IP).strip()
+                    msg = (
+                        f"ℹ️ <b>HOW TO UPDATE WHITELIST IP</b>\n\n"
+                        f"• <b>Current Server Public IP:</b> <code>{cur_ip}</code>\n"
+                        f"• <b>Configured Whitelist IP:</b> <code>{whitelisted_cfg or 'None'}</code>\n\n"
+                        f"👉 <i>To set/update, send:</i>\n"
+                        f"<code>/setip {cur_ip}</code>"
+                    )
+                    send_telegram_msg(msg, reply_markup=get_telegram_inline_keyboard(self.live_trading), chat_id=chat_id)
+                else:
+                    new_ip = parts[1].strip()
+                    ip_parts = new_ip.split('.')
+                    if len(ip_parts) == 4 and all(p.isdigit() and 0 <= int(p) <= 255 for p in ip_parts):
+                        BINANCE_WHITELISTED_IP = new_ip
+                        os.environ['BINANCE_WHITELISTED_IP'] = new_ip
+                        update_env_file('BINANCE_WHITELISTED_IP', new_ip)
+
+                        cur_ip = get_current_public_ip(notify_if_changed=False)
+                        matches = (new_ip == cur_ip)
+                        match_str = "🟢 MATCHES CURRENT SERVER IP" if matches else f"⚠️ DIFFERENT FROM SERVER IP ({cur_ip})"
+
+                        # Probe Binance Futures API
+                        ok, _ = check_binance_ip_whitelist(probe_api=True)
+                        api_str = "🟢 BINANCE FUTURES AUTHORIZED ✅" if ok else "🔴 NOT AUTHORIZED ON BINANCE YET (Error -2015)"
+
+                        msg = (
+                            f"🌐 ✅ <b>BINANCE WHITELIST IP UPDATED!</b>\n\n"
+                            f"• <b>Configured Whitelist IP:</b> <code>{new_ip}</code> (Saved to .env)\n"
+                            f"• <b>Server Public IP:</b> <code>{cur_ip}</code>\n"
+                            f"• <b>IP Match:</b> {match_str}\n"
+                            f"• <b>Binance Connection:</b> {api_str}\n\n"
+                            f"<i>Ensure <code>{new_ip}</code> is added under Binance ➔ API Management ➔ IP Access Restriction.</i>"
+                        )
+                        send_telegram_msg(msg, reply_markup=get_telegram_inline_keyboard(self.live_trading), chat_id=chat_id)
+                    else:
+                        send_telegram_msg(f"❌ <b>Invalid IP address format:</b> <code>{new_ip}</code>\nPlease provide a valid IPv4 address (e.g. <code>112.210.251.121</code>).", chat_id=chat_id)
+
             elif cmd in ['/ip', '/myip', '/whitelist']:
-                ok, cur_ip = check_binance_ip_whitelist(probe_api=True)
-                whitelisted_cfg = os.getenv('BINANCE_WHITELISTED_IP', BINANCE_WHITELISTED_IP).strip()
-                status_icon = "🟢 AUTHORIZED & WHITELISTED" if ok else "🔴 NOT WHITELISTED / MISMATCH"
-                msg = (
-                    f"🌐 <b>BINANCE IP WHITELIST STATUS</b>\n\n"
-                    f"• <b>Current Public IP:</b> <code>{cur_ip}</code>\n"
-                    f"• <b>Configured Whitelist:</b> <code>{whitelisted_cfg or 'Auto-detect'}</code>\n"
-                    f"• <b>Status:</b> {status_icon}\n\n"
-                    f"<i>If Binance rejects orders with code -2015, ensure {cur_ip} is added to your API Key list on Binance.</i>"
-                )
-                send_telegram_msg(msg, reply_markup=get_telegram_inline_keyboard(self.live_trading), chat_id=chat_id)
+                if len(parts) > 1:
+                    # User passed an IP to /ip: treat like /setip
+                    self.handle_telegram_command(f"/setip {parts[1]}", chat_id=chat_id)
+                else:
+                    ok, cur_ip = check_binance_ip_whitelist(probe_api=True)
+                    whitelisted_cfg = os.getenv('BINANCE_WHITELISTED_IP', BINANCE_WHITELISTED_IP).strip()
+                    status_icon = "🟢 AUTHORIZED & WHITELISTED ✅" if ok else "🔴 NOT WHITELISTED / MISMATCH ⚠️"
+                    matches = (cur_ip == whitelisted_cfg) if whitelisted_cfg else True
+                    match_str = "🟢 MATCHES SERVER IP" if matches else f"⚠️ DOES NOT MATCH ({whitelisted_cfg})"
+                    msg = (
+                        f"🌐 <b>BINANCE IP WHITELIST STATUS</b>\n\n"
+                        f"• <b>Current Server Public IP:</b> <code>{cur_ip}</code>\n"
+                        f"• <b>Configured Whitelist IP:</b> <code>{whitelisted_cfg or 'Auto-detect'}</code>\n"
+                        f"• <b>Match Status:</b> {match_str}\n"
+                        f"• <b>Binance API Status:</b> {status_icon}\n\n"
+                        f"💡 <i>To update whitelist IP via Telegram, send:</i>\n"
+                        f"<code>/setip {cur_ip}</code>\n\n"
+                        f"<i>If Binance rejects orders with code -2015, ensure <code>{cur_ip}</code> is added to your API Key on Binance.</i>"
+                    )
+                    send_telegram_msg(msg, reply_markup=get_telegram_inline_keyboard(self.live_trading), chat_id=chat_id)
 
             elif cmd in ['/positions', '/pos', '/orders', '/trades']:
                 positions = get_binance_futures_positions()
@@ -3943,9 +4061,9 @@ class WeatherEnsembleBot:
 
         while True:
             try:
-                # Periodic IP Whitelist verification (every 15 min)
+                # Periodic IP Whitelist verification (every 60s)
                 global _LAST_PERIODIC_IP_CHECK
-                if time.time() - _LAST_PERIODIC_IP_CHECK > 900:
+                if time.time() - _LAST_PERIODIC_IP_CHECK > 60:
                     _LAST_PERIODIC_IP_CHECK = time.time()
                     check_binance_ip_whitelist(probe_api=False)
 
