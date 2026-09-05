@@ -3140,7 +3140,23 @@ class WeatherEnsembleBot:
             return {'symbol': symbol, 'action': 'NO TRADE', 'is_trade': False, 'price': float(df['close'].iloc[-1]), 'consensus': 0, 'timestamp': df.index[-1] if isinstance(df.index[-1], str) else ''}
 
         last_price = float(df['close'].iloc[-1])
-        signals = self.evaluate_31_models(df)
+        # Macro inputs from in-memory cache (0 extra API calls)
+        btc_close = None
+        if getattr(GLOBAL_CACHE, 'btc_15m_raw', None) and len(GLOBAL_CACHE.btc_15m_raw) >= 20:
+            try:
+                btc_close = pd.Series([float(k[4]) for k in GLOBAL_CACHE.btc_15m_raw])
+            except Exception:
+                btc_close = None
+
+        funding_rate = GLOBAL_CACHE.all_funding.get(symbol, None) if getattr(GLOBAL_CACHE, 'all_funding', None) else None
+        curr_hour_utc = datetime.now(timezone.utc).hour
+
+        signals = self.evaluate_31_models(
+            df,
+            btc_close=btc_close,
+            funding_rate=funding_rate,
+            hour_utc=curr_hour_utc,
+        )
         bull_count = signals.count('BULLISH')
         bear_count = signals.count('BEARISH')
         neutral_count = signals.count('NEUTRAL')
@@ -3303,16 +3319,28 @@ class WeatherEnsembleBot:
                         print(f"[FILTERED CORE GATE] {symbol} SELL MSS setup valid but {core_desc}.", flush=True)
 
             # 🌪️ Priority 3: 4-MA Stack Momentum Consensus (EMA 20/50/100/200 + Consensus Models)
-            if action == 'NO TRADE' and (max_consensus >= effective_threshold or (adx_val >= 28.0 and max_consensus >= 28)):
+            active_models = bull_count + bear_count
+            consensus_ratio = (
+                max_consensus / active_models
+                if active_models > 0 else 0.0
+            )
+
+            consensus_eligible = (
+                active_models >= 12
+                and max_consensus >= 13
+                and consensus_ratio >= 0.75
+            )
+
+            if action == 'NO TRADE' and consensus_eligible:
                 target_side = 'BUY' if bull_count >= bear_count else 'SELL'
                 min_pillars_req = 9 if not is_trending else 7
                 pillar_ok = pillar_consensus >= min_pillars_req
                 ma_aligned = ma_bull_stack if target_side == 'BUY' else ma_bear_stack
 
                 if not pillar_ok:
-                    print(f"[FILTERED PILLAR] {symbol} {target_side} raw consensus {max_consensus}/31 but only {pillar_consensus}/9 pillars agree (need ≥ {min_pillars_req}/9).", flush=True)
+                    print(f"[FILTERED PILLAR] {symbol} {target_side} raw consensus {max_consensus}/31 ({max_consensus}/{active_models} active, {consensus_ratio*100:.0f}%) but only {pillar_consensus}/9 pillars agree (need ≥ {min_pillars_req}/9).", flush=True)
                 elif not ma_aligned:
-                    print(f"[FILTERED MA STACK] {symbol} {target_side} consensus reached ({max_consensus}/31) but 4-MA Stack is not ordered in trend direction.", flush=True)
+                    print(f"[FILTERED MA STACK] {symbol} {target_side} consensus reached ({max_consensus}/{active_models} active, {consensus_ratio*100:.0f}%) but 4-MA Stack is not ordered in trend direction.", flush=True)
                 else:
                     core_ok, core_desc, ob_ratio, of_desc_core = self._check_core_entry_gates(symbol, target_side, df)
                     smc_4h_ok, smc_bias_desc, is_scalp = check_macro_and_mss_bias(symbol, target_side, df=df, micro_context='CONSENSUS')
@@ -3331,8 +3359,8 @@ class WeatherEnsembleBot:
                         else:
                             trade_custom_tp = last_price - (2.0 * atr14_val)
                             trade_custom_sl = ema50_val + (0.5 * atr14_val)
-                        of_desc = f"🌪️ 4-MA Momentum Consensus ({max_consensus}/31 models) | Ordered Stack Confirmed 🌊"
-                        print(f"[4-MA CONSENSUS AUTO-{target_side}] {symbol} ({max_consensus}/31) -> TP: ${trade_custom_tp:.4f} | SL: ${trade_custom_sl:.4f} 🎯", flush=True)
+                        of_desc = f"🌪️ 4-MA Momentum Consensus ({max_consensus}/{active_models} active, {consensus_ratio*100:.0f}%) | Ordered Stack Confirmed 🌊"
+                        print(f"[4-MA CONSENSUS AUTO-{target_side}] {symbol} ({max_consensus}/{active_models} active, {consensus_ratio*100:.0f}%) -> TP: ${trade_custom_tp:.4f} | SL: ${trade_custom_sl:.4f} 🎯", flush=True)
                     else:
                         if not is_vol_surge:
                             print(f"[FILTERED VOLUME] {symbol} {target_side} consensus reached ({max_consensus}/31) but Volume below expansion threshold.", flush=True)

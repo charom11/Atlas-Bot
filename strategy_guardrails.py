@@ -57,3 +57,27 @@ def seasonality_signal(validated: bool, signal: str) -> str:
     if not validated:
         return "NEUTRAL"
     return signal if signal in {"BULLISH", "BEARISH", "NEUTRAL"} else "NEUTRAL"
+
+
+def check_consensus_eligibility(
+    bull_count: int,
+    bear_count: int,
+    *,
+    min_active: int = 12,
+    min_votes: int = 13,
+    min_ratio: float = 0.75,
+) -> Tuple[bool, int, int, float]:
+    """
+    Check if a normalized consensus supermajority is reached among active models.
+    Returns: (is_eligible, active_models, max_consensus, consensus_ratio)
+    """
+    active_models = bull_count + bear_count
+    max_consensus = max(bull_count, bear_count)
+    consensus_ratio = (max_consensus / active_models) if active_models > 0 else 0.0
+    is_eligible = (
+        active_models >= min_active
+        and max_consensus >= min_votes
+        and consensus_ratio >= min_ratio
+    )
+    return is_eligible, active_models, max_consensus, consensus_ratio
+
