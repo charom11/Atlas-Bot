@@ -32,6 +32,7 @@ from typing import Optional
 from strategy_consensus_v3 import evaluate_hardened_31_models
 from trading_safety import (
     TradingStateUnavailable,
+    InvalidOrderRequest,
     RetryDecision,
     classify_binance_error,
     retry_call,
@@ -39,6 +40,12 @@ from trading_safety import (
     choose_authoritative_stop,
     exactly_one_protective_stop,
     protective_stop_key,
+    order_response_is_success,
+    find_order_by_client_id,
+)
+from execution_reconciliation import (
+    AmbiguousOrderSubmission,
+    submit_market_order_idempotent,
 )
 
 if sys.platform == "win32":
@@ -2860,14 +2867,62 @@ def place_binance_futures_market_order(symbol="XRPUSDT", side="BUY", trade_usdt=
     # Bug #3 Fix: Hardcode Hedge Mode positionSide (account is always in dual-side mode)
     position_side = 'LONG' if side.upper() == 'BUY' else 'SHORT'
 
-    params = {
-        'symbol': symbol,
-        'side': side.upper(),
-        'type': 'MARKET',
-        'quantity': str(qty),
-        'positionSide': position_side
-    }
-    res = binance_futures_signed_request('POST', '/fapi/v1/order', params)
+    def _submit_market_order(order_params):
+        p = dict(order_params)
+        p['positionSide'] = position_side
+        p['quantity'] = str(qty)  # Use exact formatted precision string
+        return binance_futures_signed_request('POST', '/fapi/v1/order', p)
+
+    def _reconcile_market_order(client_id):
+        # 1. Authoritative direct query by origClientOrderId directly on Binance
+        try:
+            order_res = binance_futures_signed_request('GET', '/fapi/v1/order', {
+                'symbol': symbol,
+                'origClientOrderId': client_id
+            })
+            if order_response_is_success(order_res):
+                return order_res
+        except Exception as e:
+            print(f'[RECONCILE WARN] Direct query failed for #{symbol} ({client_id}): {e}', flush=True)
+
+        # 2. Fallback query: Check open orders for symbol
+        try:
+            open_res = binance_futures_signed_request('GET', '/fapi/v1/openOrders', {'symbol': symbol})
+            if isinstance(open_res, list):
+                match = find_order_by_client_id(open_res, client_id)
+                if match is not None:
+                    return match
+        except Exception as e:
+            print(f'[RECONCILE WARN] Open orders query failed for #{symbol} ({client_id}): {e}', flush=True)
+
+        return None
+
+    try:
+        res = submit_market_order_idempotent(
+            symbol=symbol,
+            side=side.upper(),
+            quantity=float(qty),
+            submit=_submit_market_order,
+            reconcile=_reconcile_market_order
+        )
+    except AmbiguousOrderSubmission as e:
+        print(f'🚨 [AMBIGUOUS SUBMISSION ERROR] #{symbol} {side}: {e}', flush=True)
+        try:
+            send_telegram_msg(
+                f'🚨 <b>AMBIGUOUS ORDER SUBMISSION</b>\n\n'
+                f'• Asset: <b>#{symbol}</b> ({side})\n'
+                f'• Details: <i>{e}</i>\n\n'
+                f'⚠️ Automated retry blocked to prevent position duplication. Please verify manually.'
+            )
+        except Exception:
+            pass
+        return {'error': 'Ambiguous order submission', 'details': str(e)}
+    except InvalidOrderRequest as e:
+        print(f'🚨 [INVALID ORDER REQUEST] #{symbol} {side} rejected: {e}', flush=True)
+        return {'error': 'Invalid order parameters', 'details': str(e)}
+    except Exception as e:
+        print(f'🚨 [ORDER SUBMISSION ERROR] #{symbol} {side} exception: {e}', flush=True)
+        return {'error': f'Order submission failed: {e}'}
 
     if isinstance(res, dict) and 'code' in res and 'orderId' not in res:
         err_code = res.get('code')

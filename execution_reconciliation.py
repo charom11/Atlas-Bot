@@ -12,6 +12,7 @@ from trading_safety import (
     InvalidOrderRequest,
     find_order_by_client_id,
     make_client_order_id,
+    order_response_is_success,
     response_is_ambiguous,
     validate_order_request,
 )
@@ -61,9 +62,9 @@ def submit_market_order_idempotent(
         return response
 
     existing = reconcile(client_order_id)
-    if isinstance(existing, dict):
+    if order_response_is_success(existing):
         return existing
-    if existing:
+    if existing and not isinstance(existing, dict):
         match = find_order_by_client_id(existing, client_order_id)
         if match is not None:
             return match
@@ -73,9 +74,9 @@ def submit_market_order_idempotent(
         # One reconciliation after the bounded retry is safe; never issue a
         # third blind submission with the same intent.
         existing = reconcile(client_order_id)
-        if isinstance(existing, dict):
+        if order_response_is_success(existing):
             return existing
-        if existing:
+        if existing and not isinstance(existing, dict):
             match = find_order_by_client_id(existing, client_order_id)
             if match is not None:
                 return match
