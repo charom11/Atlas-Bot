@@ -518,7 +518,7 @@ class CircuitBreakerManager:
                     print(f"🛑 [CIRCUIT BREAKER TRIPPED] {self.trip_reason}! Halting new trade entries until 00:00 UTC.", flush=True)
                     send_telegram_msg(f"🛑 <b>CIRCUIT BREAKER TRIPPED</b>\n\nReason: {self.trip_reason}\n• Realized PnL Today: <b>${self.realized_pnl_today:+,.2f} USDT</b>\n• Total Trades Today: <b>{self.trades_today}</b> ({self.wins_today}W / {self.losses_today}L)\n\n<i>Automated new entries paused until 00:00 UTC. Existing positions managed normally.</i>")
         except Exception as e:
-            pass
+            print(f"[CIRCUIT BREAKER WARN] Realized PnL sync failed: {e}", flush=True)
 
     def check_and_update(self, current_balance):
         now_dt = datetime.now(timezone.utc)
@@ -705,7 +705,7 @@ class AtlasDarwinianOptimizer:
                     'updated_at': datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
                 }, f, indent=2)
         except Exception as e:
-            pass
+            print(f"[ATLAS DARWINIAN SAVE WARN] {e}", flush=True)
 
     def record_trade_outcome(self, channel, pnl):
         if channel in self.channel_history:
@@ -1721,8 +1721,8 @@ def close_binance_futures_position(symbol):
                 f"• Details: <i>{e}</i>\n\n"
                 f"⚠️ Automated retry blocked. Protective orders preserved. Manual intervention required."
             )
-        except Exception:
-            pass
+        except Exception as tg_err:
+            print(f"[TELEGRAM WARN] Could not send ambiguous close alert: {tg_err}", flush=True)
         return {'error': 'Ambiguous close submission', 'details': str(e)}
     except InvalidOrderRequest as e:
         print(f"🚨 [INVALID CLOSE REQUEST] #{symbol} {close_side} rejected: {e}", flush=True)
@@ -1997,7 +1997,8 @@ def detect_mss_from_api(symbol, interval='15m', window=3):
             return 'BULLISH'
 
         return 'NEUTRAL'
-    except Exception:
+    except Exception as e:
+        print(f"[MSS API WARN] #{symbol} {interval}: {e}", flush=True)
         return 'NEUTRAL'
 
 def detect_1h_mss_from_api(symbol, window=3):
@@ -2203,7 +2204,8 @@ def check_btc_adx_market_regime(adx_chop_threshold=22):
         if adx_val < adx_chop_threshold:
             return False, round(adx_val, 1), f"Chop Zone (ADX {adx_val:.1f} < {adx_chop_threshold} - Low Volatility ⚠️)"
         return True, round(adx_val, 1), f"Trending Market (ADX {adx_val:.1f} >= {adx_chop_threshold} 🌊)"
-    except Exception:
+    except Exception as e:
+        print(f"[ADX REGIME WARN] {e} (Fail Closed)", flush=True)
         return False, 0.0, "ADX check unavailable (entry blocked)"
 
 # --------------------------------------------------------------------------
@@ -2218,8 +2220,8 @@ def _save_entry_timestamps():
         os.makedirs(os.path.dirname(_ENTRY_TIMESTAMPS_FILE), exist_ok=True)
         with open(_ENTRY_TIMESTAMPS_FILE, 'w') as f:
             json.dump(LAST_ENTRY_TIMESTAMPS, f, indent=2)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[ENTRY TIMESTAMPS SAVE WARN] {e}", flush=True)
 
 def _load_entry_timestamps():
     """BUG-7 Fix: Reload LAST_ENTRY_TIMESTAMPS from disk on startup, pruning entries older than 1 hour."""
@@ -2304,10 +2306,11 @@ def check_order_flow_absorption(symbol, target_side, trades_limit=500):
         url = f"https://fapi.binance.com/fapi/v1/aggTrades?symbol={symbol}&limit={trades_limit}"
         r = requests.get(url, timeout=3)
         if r.status_code != 200:
-            return True, 'NEUTRAL', 0.0, 'NONE'
+            print(f"[ORDER FLOW WARN] #{symbol} aggTrades HTTP {r.status_code} (Fail Closed)", flush=True)
+            return False, 'ORDER FLOW UNAVAILABLE (HTTP Error) 🛑', 0.0, 'NONE'
         raw = r.json()
         if not raw or len(raw) < 30:
-            return True, 'NEUTRAL', 0.0, 'NONE'
+            return False, 'ORDER FLOW UNAVAILABLE (Insufficient Trades) 🛑', 0.0, 'NONE'
 
         agg_buys = sum(float(t['q']) for t in raw if not t['m'])
         agg_sells = sum(float(t['q']) for t in raw if t['m'])
@@ -2339,8 +2342,9 @@ def check_order_flow_absorption(symbol, target_side, trades_limit=500):
             desc = "Bearish Absorption 🛑" if absorption == "BEARISH_ABSORPTION" else f"Aggressive Sell Delta ({delta_pct:+.1f}%)"
 
         return confirmed, desc, round(delta_pct, 1), absorption
-    except Exception:
-        return True, 'NEUTRAL', 0.0, 'NONE'
+    except Exception as e:
+        print(f"[ORDER FLOW ERROR] #{symbol}: {e} (Fail Closed)", flush=True)
+        return False, f'ORDER FLOW ERROR: {e} (Fail Closed) 🛑', 0.0, 'NONE'
 
 # --------------------------------------------------------------------------
 # Upgrade 4: 3-Stage Scale-Out & Dynamic Trailing Stop Daemon (State & Disk Persistence)
@@ -2355,8 +2359,8 @@ def _save_position_targets():
         os.makedirs(os.path.dirname(_POSITION_TARGETS_FILE), exist_ok=True)
         with open(_POSITION_TARGETS_FILE, 'w') as f:
             json.dump(ACTIVE_POSITION_TARGETS, f, indent=2)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[POSITION TARGETS SAVE WARN] {e}", flush=True)
 
 def _load_position_targets():
     """BUG-14 Fix: Reload ACTIVE_POSITION_TARGETS from disk on startup, pruning stale entries."""
@@ -2549,8 +2553,8 @@ def place_binance_futures_tp_sl(symbol, side, last_price, atr, leverage=75, tota
             if cancel_oid:
                 try:
                     cancel_binance_order_by_id(symbol, order_id=cancel_oid)
-                except Exception:
-                    pass
+                except Exception as cancel_err:
+                    print(f"🚨 [EMERGENCY CLEANUP ERROR] Failed to cancel TP #{cancel_oid} for #{symbol}: {cancel_err}", flush=True)
         close_result = close_binance_futures_position(symbol)
         close_accepted = isinstance(close_result, dict) and close_result.get('orderId') is not None and close_result.get('code') is None
         if not close_accepted:
@@ -2568,8 +2572,8 @@ def place_binance_futures_tp_sl(symbol, side, last_price, atr, leverage=75, tota
         err_msg = f"🚨 <b>SL PLACEMENT FAILED</b>\n\n• Asset: <b>#{symbol}</b> ({side})\n• Entry: <b>${last_price:,.4f}</b>\n• Emergency close: <b>{'accepted by Binance' if close_accepted else 'NOT confirmed — protective orders preserved where possible'}</b>\n\n⚠️ Manual verification is required."
         try:
             send_telegram_msg(err_msg)
-        except Exception:
-            pass
+        except Exception as tg_err:
+            print(f"[TELEGRAM WARN] Could not send SL placement failed alert: {tg_err}", flush=True)
         return {'error': 'SL placement failed', 'tp_res': tp_res, 'sl_res': sl_res, 'emergency_close': close_result}
 
     # Capture order ids so later stages can cancel/track THIS specific order
@@ -2598,6 +2602,9 @@ def place_binance_futures_tp_sl(symbol, side, last_price, atr, leverage=75, tota
                     sl_order_id = auth_id
     except Exception as post_err:
         print(f"[STOP CARDINALITY AUDIT WARN] #{symbol}: {post_err}", flush=True)
+
+    if not sl_order_id:
+        print(f"🚨 [UNVERIFIED STOP WARN] #{symbol} {side}: Protective stop order ID could not be confirmed on Binance!", flush=True)
 
     # Record targets for Scale-Out / Dynamic Trailing Runner Daemon
     ACTIVE_POSITION_TARGETS[symbol] = {
@@ -2880,7 +2887,8 @@ def manage_active_positions_breakeven(positions=None):
                                     amount=float(scale2_str),
                                     params={'positionSide': side}
                                 )
-                            except Exception:
+                            except Exception as ccxt_err:
+                                print(f"[TP2 SCALE-OUT] CCXT order failed ({ccxt_err}), falling back to direct REST...", flush=True)
                                 tp2_params = {
                                     'symbol': sym,
                                     'side': close_side,
@@ -2965,8 +2973,8 @@ def manage_active_positions_breakeven(positions=None):
         print(f"🚨 [POSITION MANAGER EXCEPTION] {e}", flush=True)
         try:
             send_telegram_msg(f"🚨 <b>POSITION MANAGER ERROR</b>\n\nThe stop/trailing daemon hit an exception this cycle: <code>{e}</code>\nExisting stops were left untouched. Check <code>/positions</code>.")
-        except Exception:
-            pass
+        except Exception as tg_err:
+            print(f"[TELEGRAM WARN] Could not send position manager alert: {tg_err}", flush=True)
 
 def place_binance_futures_market_order(symbol="XRPUSDT", side="BUY", trade_usdt=None, margin_pct=0.03, sizing_mode="margin", last_price=None, leverage=75, atr=None, custom_tp=None, custom_sl=None, is_quick_scalp=False, channel='FIBONACCI'):
     set_binance_futures_leverage(symbol=symbol, leverage=leverage)
@@ -3091,8 +3099,8 @@ def place_binance_futures_market_order(symbol="XRPUSDT", side="BUY", trade_usdt=
                 f'• Details: <i>{e}</i>\n\n'
                 f'⚠️ Automated retry blocked to prevent position duplication. Please verify manually.'
             )
-        except Exception:
-            pass
+        except Exception as tg_err:
+            print(f"[TELEGRAM WARN] Could not send ambiguous order alert: {tg_err}", flush=True)
         return {'error': 'Ambiguous order submission', 'details': str(e)}
     except InvalidOrderRequest as e:
         print(f'🚨 [INVALID ORDER REQUEST] #{symbol} {side} rejected: {e}', flush=True)
@@ -3119,8 +3127,8 @@ def place_binance_futures_market_order(symbol="XRPUSDT", side="BUY", trade_usdt=
                 print(f"[TRADFI AUTO-DISABLED] #{symbol} disabled due to unsigned TradFi-Perps contract (-4411).", flush=True)
                 try:
                     send_telegram_msg(t_alert)
-                except Exception:
-                    pass
+                except Exception as tg_err:
+                    print(f"[TELEGRAM WARN] Could not send TradFi alert: {tg_err}", flush=True)
     elif isinstance(res, dict) and 'orderId' in res:
         mode_str = "⚡ QUICK SCALP" if is_quick_scalp else "🌊 TREND RUNNER"
         print(f"[BINANCE ORDER FILLED] #{symbol} {side} [{mode_str}] Order ID: #{res.get('orderId')} | Status: {res.get('status', 'FILLED')}", flush=True)
@@ -3592,7 +3600,8 @@ class WeatherEnsembleBot:
         if getattr(GLOBAL_CACHE, 'btc_15m_raw', None) and len(GLOBAL_CACHE.btc_15m_raw) >= 20:
             try:
                 btc_close = pd.Series([float(k[4]) for k in GLOBAL_CACHE.btc_15m_raw])
-            except Exception:
+            except Exception as btc_err:
+                print(f"[BTC MACRO WARN] Failed to build btc_close series: {btc_err}", flush=True)
                 btc_close = None
 
         funding_rate = GLOBAL_CACHE.all_funding.get(symbol, None) if getattr(GLOBAL_CACHE, 'all_funding', None) else None
@@ -4033,8 +4042,9 @@ class WeatherEnsembleBot:
                         'volume': float(k[5])
                     })
                 return pd.DataFrame(data, index=dates)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[KLINES FETCH ERROR] #{symbol} {interval}: {e}", flush=True)
+            return None
         return None
 
     def start_telegram_command_listener(self):
@@ -4082,8 +4092,8 @@ class WeatherEnsembleBot:
                                         json={"callback_query_id": cb_id},
                                         timeout=4
                                     )
-                                except Exception:
-                                    pass
+                                except Exception as cb_err:
+                                    print(f"[TELEGRAM WARN] Could not answer callback query: {cb_err}", flush=True)
                                 if cmd:
                                     print(f"[TELEGRAM C2] Button click: '{cmd}' from {sender_id}", flush=True)
                                     self.handle_telegram_command(cmd, chat_id=message_chat_id or sender_id)
@@ -4509,8 +4519,8 @@ class WeatherEnsembleBot:
             print(f"[TELEGRAM COMMAND HANDLER ERROR] {e}", flush=True)
             try:
                 send_telegram_msg(f"⚠️ <b>Command Handler Error:</b> <code>{e}</code>", chat_id=chat_id)
-            except Exception:
-                pass
+            except Exception as tg_err:
+                print(f"[TELEGRAM WARN] Could not send command handler error to user: {tg_err}", flush=True)
 
     def run_multi_asset_live_loop(self, poll_interval=10):
         print(f"\n=======================================================")
