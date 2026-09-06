@@ -22,10 +22,10 @@ jobs:
           pip install pytest rich websocket-client ccxt
       - name: Compile Python sources
         run: |
-          python -m py_compile main.py core/main.py
+          python -m py_compile main.py core/main.py trading_safety.py
       - name: Run safety tests
         run: |
-          python -m pytest -q tests/test_trading_safety.py
+          python -m pytest -q tests
       - name: Validate CLI entrypoint
         run: |
           python -u main.py --help >/tmp/atlas-help.txt
