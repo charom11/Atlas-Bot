@@ -29,10 +29,6 @@ import numpy as np
 import pandas as pd
 from typing import Optional
 
-_parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _parent_dir not in sys.path:
-    sys.path.insert(0, _parent_dir)
-
 from strategy_consensus_v3 import evaluate_hardened_31_models
 from trading_safety import (
     TradingStateUnavailable,
@@ -51,6 +47,70 @@ if sys.platform == "win32":
         sys.stderr.reconfigure(encoding='utf-8')
     except Exception:
         pass
+    try:
+        import ctypes
+        # BUG-10 Fix: Prevent Windows from going to sleep while bot is running
+        # ES_CONTINUOUS (0x80000000) | ES_SYSTEM_REQUIRED (0x00000001)
+        ctypes.windll.kernel32.SetThreadExecutionState(0x80000000 | 0x00000001)
+    except Exception:
+        pass
+
+# --------------------------------------------------------------------------
+# 📝 File-based Log Tee with Size Rotation (mirrors all stdout to bot_output.log)
+# --------------------------------------------------------------------------
+class _TeeLogger:
+    """BUG-9 Fix: Tees all writes to stream and log file with 10MB auto-rotation and 3 backups."""
+    def __init__(self, stream, filepath, max_bytes=10*1024*1024, backup_count=3):
+        self._stream = stream
+        self._filepath = filepath
+        self._max_bytes = max_bytes
+        self._backup_count = backup_count
+        self._log = open(filepath, 'a', encoding='utf-8', buffering=1)
+
+    def _rotate_if_needed(self):
+        try:
+            if self._log.tell() >= self._max_bytes:
+                self._log.close()
+                for i in range(self._backup_count - 1, 0, -1):
+                    sfn = f"{self._filepath}.{i}"
+                    dfn = f"{self._filepath}.{i+1}"
+                    if os.path.exists(sfn):
+                        if os.path.exists(dfn):
+                            os.remove(dfn)
+                        os.rename(sfn, dfn)
+                dfn = f"{self._filepath}.1"
+                if os.path.exists(dfn):
+                    os.remove(dfn)
+                if os.path.exists(self._filepath):
+                    os.rename(self._filepath, dfn)
+                self._log = open(self._filepath, 'a', encoding='utf-8', buffering=1)
+        except Exception:
+            pass
+
+    def write(self, data):
+        self._stream.write(data)
+        try:
+            self._log.write(data)
+            self._rotate_if_needed()
+        except Exception:
+            pass
+
+    def flush(self):
+        self._stream.flush()
+        try:
+            self._log.flush()
+        except Exception:
+            pass
+
+    def __getattr__(self, attr):
+        return getattr(self._stream, attr)
+
+try:
+    _log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '')
+    sys.stdout = _TeeLogger(sys.stdout, os.path.join(_log_dir, 'bot_output.log'))
+    sys.stderr = _TeeLogger(sys.stderr, os.path.join(_log_dir, 'bot_err.log'))
+except Exception as _tee_err:
+    print(f"[LOG TEE WARN] Could not open log file: {_tee_err}", flush=True)
 
 # --------------------------------------------------------------------------
 # Environment Configuration (.env Loader)
@@ -62,16 +122,18 @@ def load_env_file(env_file='.env'):
                 line = line.strip()
                 if line and not line.startswith('#') and '=' in line:
                     k, v = line.split('=', 1)
-                    os.environ[k.strip()] = v.strip()
+                    # BUG-3 Fix: Strip whitespace and quotes from keys and values
+                    os.environ[k.strip()] = v.strip().strip('"').strip("'")
 
 load_env_file()
 
-TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
-TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '')
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '').strip().strip('"').strip("'")
+TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '').strip().strip('"').strip("'")
 TELEGRAM_NOTIFICATIONS = os.getenv('TELEGRAM_NOTIFICATIONS', 'true').lower() == 'true'
 
-BINANCE_API_KEY = os.getenv('BINANCE_API_KEY', '')
-BINANCE_API_SECRET = os.getenv('BINANCE_API_SECRET', '')
+# BUG-3 Fix: Sanitize API credentials at boot
+BINANCE_API_KEY = os.getenv('BINANCE_API_KEY', '').strip().strip('"').strip("'")
+BINANCE_API_SECRET = os.getenv('BINANCE_API_SECRET', '').strip().strip('"').strip("'")
 BINANCE_WHITELISTED_IP = os.getenv('BINANCE_WHITELISTED_IP', '').strip()
 
 def update_env_file(key, value, env_file='.env'):
@@ -234,8 +296,8 @@ def get_ccxt_exchange():
     if _CCXT_EXCHANGE is None:
         import ccxt
         _CCXT_EXCHANGE = ccxt.binance({
-            'apiKey': os.getenv('BINANCE_API_KEY', BINANCE_API_KEY),
-            'secret': os.getenv('BINANCE_API_SECRET', BINANCE_API_SECRET),
+            'apiKey': (os.getenv('BINANCE_API_KEY') or BINANCE_API_KEY or '').strip().strip('"').strip("'"),
+            'secret': (os.getenv('BINANCE_API_SECRET') or BINANCE_API_SECRET or '').strip().strip('"').strip("'"),
             'options': {'defaultType': 'future', 'adjustForTimeDifference': True}
         })
         _CCXT_EXCHANGE.load_time_difference()
@@ -264,6 +326,7 @@ class GlobalDataCache:
     def __init__(self):
         self.all_funding = {}
         self.btc_15m_raw = None
+        self.btc_15m_updated_at = 0
         self.last_update = 0
 
     def update(self, force=False):
@@ -290,7 +353,13 @@ class GlobalDataCache:
             if r.status_code == 200:
                 raw = r.json()
                 if isinstance(raw, list) and len(raw) >= 30:
-                    self.btc_15m_raw = raw
+                    # Binance includes the still-forming candle.  Macro gates must
+                    # use only completed bars, just like the execution strategy.
+                    now_ms = int(time.time() * 1000)
+                    completed = [k for k in raw if len(k) > 6 and int(k[6]) <= now_ms]
+                    if len(completed) >= 30:
+                        self.btc_15m_raw = completed
+                        self.btc_15m_updated_at = now
         except Exception:
             pass
 
@@ -1074,8 +1143,9 @@ def check_btc_macro_health(target_side):
     try:
         GLOBAL_CACHE.update()
         raw = GLOBAL_CACHE.btc_15m_raw
-        if not raw or not isinstance(raw, list):
-            return True, "BTC Normal"
+        if (not raw or not isinstance(raw, list) or len(raw) < 2
+                or time.time() - getattr(GLOBAL_CACHE, 'btc_15m_updated_at', 0) > 90):
+            return False, "BTC data unavailable (entry blocked)"
         closes = [float(k[4]) for k in raw]
         curr_btc = closes[-1]
         ema20 = pd.Series(closes).ewm(span=20, adjust=False).mean().iloc[-1]
@@ -1089,7 +1159,7 @@ def check_btc_macro_health(target_side):
                 return False, f"BTC Pumping ({ret_15m*100:+.2f}% in 15m) - Altcoin Short Blocked 🛑"
         return True, "BTC Aligned ✅"
     except Exception:
-        return True, "BTC Normal"
+        return False, "BTC check unavailable (entry blocked)"
 
 def check_portfolio_risk_capacity(balance, new_margin_usdt, max_portfolio_margin_pct=0.06, positions=None):
     """
@@ -1105,7 +1175,9 @@ def check_portfolio_risk_capacity(balance, new_margin_usdt, max_portfolio_margin
 
         total_current_margin = 0.0
         for p in auth_positions:
-            notional = abs(float(p.get('notional', 0.0)))
+            # positionRisk supplies notional; retain a mark-price fallback for
+            # callers that pass normalized position records.
+            notional = abs(float(p.get('notional', float(p.get('positionAmt', 0.0)) * float(p.get('markPrice', 0.0)))))
             lev = float(p.get('leverage', 50))
             total_current_margin += (notional / lev) if lev > 0 else 0.0
 
@@ -1142,6 +1214,21 @@ def sync_server_time():
         # (zeroing causes -1021 Timestamp errors if local clock drifts)
         pass
 
+# BUG-4 Fix: Known default notional values to prevent -4164 errors on cold start if exchangeInfo fails
+_KNOWN_DEFAULT_NOTIONAL = {
+    'BTCUSDT': 50.0,
+    'ETHUSDT': 20.0,
+    'LINKUSDT': 20.0,
+    'SOLUSDT': 5.0,
+    'AVAXUSDT': 5.0,
+    'XRPUSDT': 5.0,
+    'ADAUSDT': 5.0,
+    'APTUSDT': 5.0,
+    'XAUUSDT': 5.0,
+    'XAGUSDT': 5.0,
+    'PAXGUSDT': 5.0
+}
+
 def get_symbol_info(symbol):
     global _EXCHANGE_INFO_CACHE, _EXCHANGE_INFO_TS
     now = time.time()
@@ -1160,9 +1247,13 @@ def get_symbol_info(symbol):
                     'minNotional': sym_notional
                 }
             _EXCHANGE_INFO_TS = now
-        except Exception:
-            pass
-    info = _EXCHANGE_INFO_CACHE.get(symbol, {'pricePrecision': 4, 'quantityPrecision': 3, 'minNotional': 5.0})
+        except Exception as e_info:
+            # BUG-4 Fix: Never fail silently to default 5.0; log warning and keep existing cache
+            print(f"[EXCHANGE INFO WARN] Failed to update exchangeInfo cache: {e_info}. Retaining {_EXCHANGE_INFO_CACHE.get(symbol, 'known')}.", flush=True)
+            _EXCHANGE_INFO_TS = now - 3540  # Retry in 60 seconds instead of immediately spamming
+
+    default_notional = _KNOWN_DEFAULT_NOTIONAL.get(symbol, 5.0)
+    info = _EXCHANGE_INFO_CACHE.get(symbol, {'pricePrecision': 4, 'quantityPrecision': 3, 'minNotional': default_notional})
     return info['pricePrecision'], info['quantityPrecision'], info['minNotional']
 
 def get_symbol_precision(symbol):
@@ -1175,6 +1266,7 @@ def get_symbol_min_notional(symbol):
 
 def binance_futures_signed_request(method, endpoint, params=None, max_retries=3):
     global _SERVER_TIME_SYNCED
+    # BUG-3 Fix: Ensure API key and secret are stripped of all whitespace and quotes
     api_key = (os.getenv('BINANCE_API_KEY') or BINANCE_API_KEY or '').strip().strip('"').strip("'")
     api_secret = (os.getenv('BINANCE_API_SECRET') or BINANCE_API_SECRET or '').strip().strip('"').strip("'")
     if not api_key or not api_secret:
@@ -1276,7 +1368,10 @@ def get_binance_futures_positions():
                 'positionAmt': amt,
                 'entryPrice': float(p.get('entryPrice', 0.0)),
                 'markPrice': float(p.get('markPrice', 0.0)),
+                'notional': float(p.get('notional', amt * float(p.get('markPrice', 0.0)))),
                 'unrealizedProfit': float(p.get('unRealizedProfit', 0.0)),
+                'liquidationPrice': float(p.get('liquidationPrice', 0.0)),
+                'leverage': p.get('leverage'),
                 'marginType': p.get('marginType'),
                 'side': 'LONG' if amt > 0 else 'SHORT'
             })
@@ -1297,6 +1392,8 @@ def cancel_existing_protective_stops(symbol, position_side=None):
     try:
         # 1. Authoritatively check Algo Orders
         open_algo = binance_futures_signed_request('GET', '/fapi/v1/openAlgoOrders', {'symbol': symbol})
+        if not isinstance(open_algo, list):
+            return None
         if isinstance(open_algo, list):
             for a in open_algo:
                 k_sym, k_side = protective_stop_key(a)
@@ -1308,12 +1405,17 @@ def cancel_existing_protective_stops(symbol, position_side=None):
                 if is_stop and side_matches:
                     algo_id = a.get('algoId')
                     if algo_id:
-                        binance_futures_signed_request('DELETE', '/fapi/v1/algoOrder', {'algoId': int(algo_id)})
+                        result = binance_futures_signed_request('DELETE', '/fapi/v1/algoOrder', {'algoId': int(algo_id)})
+                        if not isinstance(result, dict) or result.get('code') is not None:
+                            print(f"[STOP RECONCILE WARN] Failed to cancel Algo stop #{algo_id}: {result}", flush=True)
+                            return None
                         cancelled_count += 1
                         print(f"[STOP RECONCILE] Cancelled existing Algo stop #{algo_id} on {symbol} ({k_side})", flush=True)
 
         # 2. Regular Orders check (for any non-algo STOP_MARKET)
         open_reg = binance_futures_signed_request('GET', '/fapi/v1/openOrders', {'symbol': symbol})
+        if not isinstance(open_reg, list):
+            return None
         if isinstance(open_reg, list):
             for o in open_reg:
                 k_sym, k_side = protective_stop_key(o)
@@ -1325,11 +1427,15 @@ def cancel_existing_protective_stops(symbol, position_side=None):
                 if is_stop and side_matches:
                     oid = o.get('orderId')
                     if oid:
-                        binance_futures_signed_request('DELETE', '/fapi/v1/order', {'symbol': symbol, 'orderId': oid})
+                        result = binance_futures_signed_request('DELETE', '/fapi/v1/order', {'symbol': symbol, 'orderId': oid})
+                        if not isinstance(result, dict) or result.get('code') is not None:
+                            print(f"[STOP RECONCILE WARN] Failed to cancel regular stop #{oid}: {result}", flush=True)
+                            return None
                         cancelled_count += 1
                         print(f"[STOP RECONCILE] Cancelled existing regular stop #{oid} on {symbol} ({k_side})", flush=True)
     except Exception as e:
         print(f"[STOP RECONCILE WARN] {symbol} error querying open stops: {e}", flush=True)
+        return None
 
     if cancelled_count > 0:
         time.sleep(0.12)  # Brief pause for Binance engine to settle cancellation
@@ -1449,7 +1555,7 @@ def place_protective_stop(symbol, close_side, position_side, qty, stop_price, pr
                 if res.get('code') == -4130:
                     cancel_existing_protective_stops(symbol, position_side)
                 if not decision.retry:
-                    print(f"⚠️ [STOP REJECTED] {symbol} non-retryable AlgoAPI error ({decision.reason}). Aborting attempts.", flush=True)
+                    print(f"⚠️ [STOP REJECTED] {symbol} non-retryable AlgoAPI response ({decision.reason}). Aborting attempts.", flush=True)
                     break
         except Exception as e:
             print(f"[STOP PLACEMENT RETRY {attempt}/{max_retries}] {symbol} AlgoAPI error: {e}", flush=True)
@@ -1466,6 +1572,8 @@ def place_protective_stop(symbol, close_side, position_side, qty, stop_price, pr
 def close_binance_futures_position(symbol):
     """Emergency closes a specific open position and cancels all remaining orders"""
     positions = get_binance_futures_positions()
+    if positions is None:
+        return {'error': 'Position state unavailable; refusing emergency close/order cancellation'}
     target = None
     for p in positions:
         if p['symbol'] == symbol:
@@ -1488,12 +1596,18 @@ def close_binance_futures_position(symbol):
         'positionSide': position_side
     }
     res = binance_futures_signed_request('POST', '/fapi/v1/order', params)
-    cancel_binance_symbol_all_orders(symbol)
+    # Never remove SL/TP until Binance has explicitly accepted the close.
+    if isinstance(res, dict) and res.get('orderId') is not None and res.get('code') is None:
+        cancel_binance_symbol_all_orders(symbol)
+    else:
+        print(f"[EMERGENCY CLOSE WARN] {symbol} close was not accepted; preserving protective orders: {res}", flush=True)
     return res
 
 def close_all_binance_futures_positions():
     """Emergency closes ALL open positions and cancels open orders"""
     positions = get_binance_futures_positions()
+    if positions is None:
+        return [{'error': 'Position state unavailable; refusing close-all'}]
     results = []
     for p in positions:
         res = close_binance_futures_position(p['symbol'])
@@ -1507,27 +1621,56 @@ def set_binance_futures_leverage(symbol="XRPUSDT", leverage=75):
 # --------------------------------------------------------------------------
 # Orphaned Order Cleaner & Garbage Collector
 # --------------------------------------------------------------------------
-def cleanup_orphaned_orders():
+def cleanup_orphaned_orders(active_positions=None):
     """
     Cancels leftover open conditional orders (Stop Loss / Take Profit) for closed positions.
     Prevents accidental ghost positions when TP triggers.
+
+    BUG-2 Fix: Per-symbol position re-verification before cancellation.
+    BUG-8 Fix: Accepts pre-fetched active_positions to prevent redundant REST calls.
     """
     try:
-        active_positions = get_binance_futures_positions()
+        if active_positions is None:
+            active_positions = get_binance_futures_positions()
         active_symbols = set(p['symbol'] for p in active_positions if float(p.get('positionAmt', 0.0)) != 0.0)
 
         cleaned_count = 0
         cleaned_symbols = set()
 
-        # 1. Regular Open Orders (TP Limit Orders)
+        # Cache of per-symbol re-verified positions to avoid redundant calls
+        _verified_closed: set = set()
+        _verified_open: set = set()
+
+        def _confirm_closed(sym):
+            """Re-fetch position for a single symbol to confirm it is truly flat."""
+            if sym in _verified_closed:
+                return True
+            if sym in _verified_open:
+                return False
+            try:
+                risk = binance_futures_signed_request('GET', '/fapi/v2/positionRisk', {'symbol': sym})
+                if isinstance(risk, list):
+                    still_open = any(abs(float(r.get('positionAmt', 0))) > 0 for r in risk)
+                    if still_open:
+                        _verified_open.add(sym)
+                        print(f"[ORPHANED CLEANER GUARD] #{sym} positionAmt>0 on re-check — skipping cancel to protect active SL.", flush=True)
+                        return False
+            except Exception:
+                # If we cannot verify, play it safe and keep the order.
+                return False
+            _verified_closed.add(sym)
+            return True
+
+        # 1. Regular Open Orders (TP / SL Limit Orders)
         open_orders = binance_futures_signed_request('GET', '/fapi/v1/openOrders')
         if isinstance(open_orders, list):
             for o in open_orders:
                 sym = o.get('symbol')
                 if sym and sym not in active_symbols:
-                    oid = o.get('orderId')
+                    if not _confirm_closed(sym):
+                        continue  # BUG-2 Fix: position still open — do NOT cancel
                     if sym not in cleaned_symbols:
-                        print(f"[ORPHANED ORDER CLEANER] Cancelling leftover Limit orders for #{sym}...", flush=True)
+                        print(f"[ORPHANED ORDER CLEANER] Cancelling leftover orders for #{sym}...", flush=True)
                         binance_futures_signed_request('DELETE', '/fapi/v1/allOpenOrders', {'symbol': sym})
                         cleaned_symbols.add(sym)
                     cleaned_count += 1
@@ -1538,10 +1681,12 @@ def cleanup_orphaned_orders():
             for a in open_algo:
                 sym = a.get('symbol')
                 if sym and sym not in active_symbols:
+                    if not _confirm_closed(sym):
+                        continue  # BUG-2 Fix: position still open — do NOT cancel
                     algo_id = a.get('algoId')
                     order_type = a.get('orderType', 'CONDITIONAL')
                     print(f"[ORPHANED ORDER CLEANER] Cancelling leftover Algo {order_type} #{algo_id} for #{sym}...", flush=True)
-                    res = binance_futures_signed_request('DELETE', '/fapi/v1/algoOrder', {'algoId': algo_id})
+                    binance_futures_signed_request('DELETE', '/fapi/v1/algoOrder', {'algoId': algo_id})
                     cleaned_count += 1
                     cleaned_symbols.add(sym)
 
@@ -1895,8 +2040,9 @@ def check_btc_adx_market_regime(adx_chop_threshold=22):
     try:
         GLOBAL_CACHE.update()
         raw = GLOBAL_CACHE.btc_15m_raw
-        if not raw or not isinstance(raw, list):
-            return True, 25.0, "ADX Unavailable (Allowed)"
+        if (not raw or not isinstance(raw, list)
+                or time.time() - getattr(GLOBAL_CACHE, 'btc_15m_updated_at', 0) > 90):
+            return False, 0.0, "ADX unavailable (entry blocked)"
         h = np.array([float(k[2]) for k in raw])
         l = np.array([float(k[3]) for k in raw])
         c = np.array([float(k[4]) for k in raw])
@@ -1906,18 +2052,45 @@ def check_btc_adx_market_regime(adx_chop_threshold=22):
             return False, round(adx_val, 1), f"Chop Zone (ADX {adx_val:.1f} < {adx_chop_threshold} - Low Volatility ⚠️)"
         return True, round(adx_val, 1), f"Trending Market (ADX {adx_val:.1f} >= {adx_chop_threshold} 🌊)"
     except Exception:
-        return True, 25.0, "ADX Check Exception"
+        return False, 0.0, "ADX check unavailable (entry blocked)"
 
 # --------------------------------------------------------------------------
 # Upgrade 3: Directional Exposure Cap (Correlation Protection)
 # --------------------------------------------------------------------------
 LAST_ENTRY_TIMESTAMPS = {}
+_ENTRY_TIMESTAMPS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'state', 'last_entry_timestamps.json')
 
-def check_directional_portfolio_cap(symbol, target_side, max_same_dir=3, *args, **kwargs):
+def _save_entry_timestamps():
+    """BUG-7 Fix: Persist LAST_ENTRY_TIMESTAMPS to disk so watchdog restarts preserve cooldowns."""
+    try:
+        os.makedirs(os.path.dirname(_ENTRY_TIMESTAMPS_FILE), exist_ok=True)
+        with open(_ENTRY_TIMESTAMPS_FILE, 'w') as f:
+            json.dump(LAST_ENTRY_TIMESTAMPS, f, indent=2)
+    except Exception:
+        pass
+
+def _load_entry_timestamps():
+    """BUG-7 Fix: Reload LAST_ENTRY_TIMESTAMPS from disk on startup, pruning entries older than 1 hour."""
+    global LAST_ENTRY_TIMESTAMPS
+    try:
+        if os.path.exists(_ENTRY_TIMESTAMPS_FILE):
+            with open(_ENTRY_TIMESTAMPS_FILE, 'r') as f:
+                loaded = json.load(f)
+            if isinstance(loaded, dict) and loaded:
+                now = time.time()
+                valid = {k: float(ts) for k, ts in loaded.items() if (now - float(ts)) < 3600}
+                LAST_ENTRY_TIMESTAMPS.update(valid)
+                if valid:
+                    print(f"[ENTRY COOLDOWNS RESTORED] Loaded active cooldowns: {valid}", flush=True)
+    except Exception as e:
+        print(f"[ENTRY COOLDOWNS LOAD WARN] {e}", flush=True)
+
+def check_directional_portfolio_cap(symbol, target_side, max_same_dir=5, positions=None, *args, **kwargs):
     """
-    Caps total open positions in the same direction at max 3 across the entire portfolio.
+    Caps total open positions in the same direction at max 5 across the entire portfolio.
     Positions where Stop-Loss has already shifted to Breakeven (risk-free) do not count against the cap.
     Enforces a 15-minute inter-trade cooldown between same-direction new entries.
+    BUG-8 Fix: Accepts pre-fetched positions to avoid redundant REST calls.
     """
     global ACTIVE_POSITION_TARGETS, LAST_ENTRY_TIMESTAMPS
     try:
@@ -1929,7 +2102,12 @@ def check_directional_portfolio_cap(symbol, target_side, max_same_dir=3, *args, 
             mins_left = (900 - time_since) / 60
             return False, 0, f"Staggered Entry Cooldown Active ({mins_left:.1f}m left before adding next {dir_key} position ⏳)"
 
-        positions = get_binance_futures_positions()
+        if positions is None:
+            positions = get_binance_futures_positions()
+        if positions is None:
+            return False, 0, "Position state unavailable (Fail Closed)"
+        if not isinstance(positions, list):
+            return False, 0, "Invalid position state (Fail Closed)"
         if not positions:
             return True, 0, "No Active Positions"
 
@@ -1961,8 +2139,8 @@ def check_directional_portfolio_cap(symbol, target_side, max_same_dir=3, *args, 
             return False, active_same_dir, f"Max {max_same_dir} {side_str} positions active ({active_same_dir}/{max_same_dir}) 🛡️"
 
         return True, active_same_dir, "Directional Cap OK"
-    except Exception:
-        return True, 0, "Cap Check Exception"
+    except Exception as e:
+        return False, 0, f"Directional cap check error: {e} (Fail Closed)"
 
 def check_order_flow_absorption(symbol, target_side, trades_limit=500):
     """
@@ -2057,6 +2235,7 @@ def _load_position_targets():
 # Partial Take-Profit Scaling & Automated Bracket Orders
 # --------------------------------------------------------------------------
 def place_binance_futures_tp_sl(symbol, side, last_price, atr, leverage=75, total_qty=None, enable_trailing=True, callback_rate=0.8, custom_tp=None, custom_sl=None, is_quick_scalp=False, channel='FIBONACCI'):
+    global ACTIVE_POSITION_TARGETS
     if (atr is None or atr <= 0) and (custom_tp is None or custom_sl is None):
         return None
     if last_price is None or last_price <= 0:
@@ -2121,13 +2300,21 @@ def place_binance_futures_tp_sl(symbol, side, last_price, atr, leverage=75, tota
         place_tp2_order = bool(one_third_qty and (one_third_qty * last_price >= min_tp_notional) and tp1_qty < total_qty)
         tp2_qty_str = tp1_qty_str  # same 33% sizing as TP1
 
-    # 1. Take Profit Order (scale-out @ TP1 on Binance Conditional Orders)
-    # --- Leg 1: TP1 (direct signed REST call — avoids CCXT Hedge Mode -1106 reduceOnly error) ---
+    # BUG-1 Fix: Split bracket into 3 INDEPENDENT try/except blocks.
+    # Previously one giant try meant: if CCXT placed TP1 then threw on SL,
+    # the except re-placed ALL orders from scratch, risking duplicate TP1 on
+    # the exchange. If the REST SL also silently failed, sl_order_id became
+    # null and the position was recorded with no protective stop.
+    # Now: each leg is independent. SL failure → cancel TP orders + Telegram
+    # alert + abort position recording entirely.
     tp_res = None
     tp2_res = None
     sl_res = None
-    tp1_order_id_placed = None
+    tp1_order_id_placed = None   # track so we can cancel if SL fails
     tp2_order_id_placed = None
+
+    exchange = get_ccxt_exchange()
+    ccxt_sym = to_ccxt_symbol(symbol)
 
     # --- Leg 1: TP1 (Binance Algo Order API — eliminates -1106 and -4120 errors) ---
     try:
@@ -2189,31 +2376,51 @@ def place_binance_futures_tp_sl(symbol, side, last_price, atr, leverage=75, tota
         except Exception as e_tp2r:
             print(f"[TP2 WARN] #{symbol} TP2 failed ({e_tp2r}).", flush=True)
 
-    # --- Leg 3: SL (CRITICAL — failure = abort entire bracket) ---
+    # --- Leg 3: SL (CRITICAL — failure = flatten the new exposure) ---
     # Pre-emptively clear any stale stops on Binance for this symbol/direction to prevent -4130
-    cancel_existing_protective_stops(symbol, position_side=position_side)
-    sl_placed, sl_order_id, _, _ = place_protective_stop(
-        symbol=symbol, close_side=close_side, position_side=position_side,
-        qty=total_qty, stop_price=float(sl_str), price_prec=price_prec
-    )
+    stops_cancelled = cancel_existing_protective_stops(symbol, position_side=position_side)
+    if stops_cancelled is None:
+        sl_placed, sl_order_id = False, None
+        print(f"[SL GUARD] #{symbol} could not verify stale-stop cancellation; refusing unprotected bracket.", flush=True)
+    else:
+        sl_placed, sl_order_id, _, _ = place_protective_stop(
+            symbol=symbol, close_side=close_side, position_side=position_side,
+            qty=total_qty, stop_price=float(sl_str), price_prec=price_prec
+        )
     sl_res = {'status': 'success', 'id': sl_order_id, 'price': sl_str} if sl_placed else None
 
     # BUG-1 Fix: If SL could not be placed — cancel TP orders, alert, abort recording.
     if not sl_placed:
-        err_msg = f"🚨 <b>SL PLACEMENT FAILED — BRACKET ABORTED</b>\n\n• Asset: <b>#{symbol}</b> ({side})\n• Entry: <b>${last_price:,.4f}</b>\n• SL target: <b>${sl_str}</b>\n\n⚠️ TP orders have been cancelled. <b>Position is OPEN with NO stop loss.</b>\nIntervene manually via /close_{symbol.lower()}"
-        print(f"🚨 [SL PLACEMENT FAILED] #{symbol} — cancelling TP orders and aborting bracket recording!", flush=True)
+        print(f"🚨 [SL PLACEMENT FAILED] #{symbol} — cancelling TPs and immediately flattening exposure!", flush=True)
+        # Cancel any TP orders already placed to keep the account clean
         for cancel_oid in [tp1_order_id_placed, tp2_order_id_placed]:
             if cancel_oid:
                 try:
                     cancel_binance_order_by_id(symbol, order_id=cancel_oid)
                 except Exception:
                     pass
+        close_result = close_binance_futures_position(symbol)
+        close_accepted = isinstance(close_result, dict) and close_result.get('orderId') is not None and close_result.get('code') is None
+        if not close_accepted:
+            # Keep an unconfirmed emergency close visible to the recovery daemon
+            # rather than silently losing a live position from local state.
+            ACTIVE_POSITION_TARGETS[symbol] = {
+                'side': side.upper(), 'entry_price': last_price,
+                'current_sl': float(sl_str), 'sl_order_id': None,
+                'initial_qty': float(total_qty), 'tp1': float(tp1_str),
+                'tp1_hit': False, 'tp2_hit': False,
+                'is_quick_scalp': bool(is_quick_scalp),
+                'needs_emergency_close': True
+            }
+            _save_position_targets()
+        err_msg = f"🚨 <b>SL PLACEMENT FAILED</b>\n\n• Asset: <b>#{symbol}</b> ({side})\n• Entry: <b>${last_price:,.4f}</b>\n• Emergency close: <b>{'accepted by Binance' if close_accepted else 'NOT confirmed — protective orders preserved where possible'}</b>\n\n⚠️ Manual verification is required."
         try:
             send_telegram_msg(err_msg)
         except Exception:
             pass
-        return {'error': 'SL placement failed', 'tp_res': tp_res, 'sl_res': sl_res}
+        return {'error': 'SL placement failed', 'tp_res': tp_res, 'sl_res': sl_res, 'emergency_close': close_result}
 
+    # Capture order ids so later stages can cancel/track THIS specific order
     if isinstance(sl_res, dict) and not sl_order_id:
         sl_order_id = sl_res.get('id') or sl_res.get('orderId')
 
@@ -2222,8 +2429,6 @@ def place_binance_futures_tp_sl(symbol, side, last_price, atr, leverage=75, tota
         tp2_order_id = tp2_res.get('id') or tp2_res.get('orderId')
 
     # Record targets for Scale-Out / Dynamic Trailing Runner Daemon
-    global ACTIVE_POSITION_TARGETS
-
     ACTIVE_POSITION_TARGETS[symbol] = {
         'side': side.upper(),
         'entry_price': last_price,
@@ -2282,9 +2487,10 @@ def _replace_protective_stop(sym, close_side, side, qty, new_stop_price, price_p
             return old_order_id, None
 
     # Step 1: Authoritatively clear any existing stop on Binance for this symbol/direction
-    cancel_existing_protective_stops(sym, position_side=norm_side)
-    if old_order_id:
-        cancel_binance_order_by_id(sym, order_id=old_order_id)
+    cancelled = cancel_existing_protective_stops(sym, position_side=norm_side)
+    if cancelled is None:
+        print(f"🚨 [STOP UPDATE ABORTED] #{sym} could not confirm cancellation of the existing stop; keeping it in place.", flush=True)
+        return old_order_id, None
     time.sleep(0.12)  # Brief settle time for Binance engine to process cancellation
 
     # Step 2: Place the new stop
@@ -2388,6 +2594,14 @@ def manage_active_positions_breakeven(positions=None):
 
             target = ACTIVE_POSITION_TARGETS.get(sym)
             if not target:
+                continue
+
+            if target.get('needs_emergency_close'):
+                print(f"🚨 [RECOVERY CLOSE RETRY] #{sym} is tracked after an SL failure; retrying emergency close.", flush=True)
+                close_result = close_binance_futures_position(sym)
+                if isinstance(close_result, dict) and close_result.get('orderId') is not None and close_result.get('code') is None:
+                    target['needs_emergency_close'] = False
+                    _save_position_targets()
                 continue
 
             side = 'LONG' if amt > 0 else 'SHORT'
@@ -2682,6 +2896,7 @@ def place_binance_futures_market_order(symbol="XRPUSDT", side="BUY", trade_usdt=
         global LAST_ENTRY_TIMESTAMPS
         dir_k = 'BUY' if side.upper() in ['BUY', 'LONG'] else 'SELL'
         LAST_ENTRY_TIMESTAMPS[dir_k] = time.time()
+        _save_entry_timestamps()  # BUG-7 Fix: Persist entry cooldown timestamp to disk
 
     if isinstance(res, dict) and 'orderId' in res and (atr is not None or custom_tp is not None or custom_sl is not None):
         tp_sl_info = place_binance_futures_tp_sl(
@@ -3133,7 +3348,7 @@ class WeatherEnsembleBot:
 
         return True, "Core Gates OK", ob_ratio, of_desc
 
-    def evaluate_bar(self, df, symbol="XRPUSDT", active_count=0):
+    def evaluate_bar(self, df, symbol="XRPUSDT", active_count=0, positions=None):
         if df is None or len(df) < 5:
             return {'symbol': symbol, 'action': 'NO TRADE', 'is_trade': False}
         if symbol in UNSUPPORTED_TRADFI_SYMBOLS:
@@ -3223,6 +3438,7 @@ class WeatherEnsembleBot:
 
         # Check BTC ADX Market Volatility Regime (Profile C: 22 Threshold)
         is_trending, adx_val, adx_desc = check_btc_adx_market_regime(adx_chop_threshold=22)
+        regime_data_available = "unavailable" not in adx_desc.lower()
         effective_threshold = 31 if not is_trending else self.threshold
 
         # Dynamic ADX-Adaptive Cooldown (1.5h in trend ADX >= 30, 3.5h in chop ADX <= 22, 3.0h standard)
@@ -3249,7 +3465,7 @@ class WeatherEnsembleBot:
                 max_swing_slots = max(2, self.max_active_positions - max_scalp_slots + 1)
 
         trade_channel = 'CONSENSUS'
-        if not self.paused and not CIRCUIT_BREAKER.circuit_tripped and active_count < self.max_active_positions and not is_in_cooldown:
+        if not self.paused and not CIRCUIT_BREAKER.circuit_tripped and regime_data_available and active_count < self.max_active_positions and not is_in_cooldown:
             # 📐 Priority 1: Objective Fibonacci 0.618 - 0.786 - 0.886 Harmonic OTE Zone (#1 Alpha Driver, PF 1.70)
             if fib_info.get('is_setup') and fib_info.get('rr', 0) >= 1.8:
                 target_side = fib_info['side']
@@ -3326,8 +3542,7 @@ class WeatherEnsembleBot:
             )
 
             consensus_eligible = (
-                active_models >= 12
-                and max_consensus >= 13
+                max_consensus >= effective_threshold
                 and consensus_ratio >= 0.75
             )
 
@@ -3473,7 +3688,7 @@ class WeatherEnsembleBot:
 
         # Upgrade 3: Sector & Directional Exposure Cap (Correlation Protection)
         if action != 'NO TRADE' and self.live_trading:
-            dir_ok, same_dir_cnt, dir_desc = check_directional_portfolio_cap(symbol, action, max_same_dir=self.max_directional_cap)
+            dir_ok, same_dir_cnt, dir_desc = check_directional_portfolio_cap(symbol, action, max_same_dir=self.max_directional_cap, positions=positions)
             if not dir_ok:
                 print(f"[FILTERED DIRECTIONAL CAP] {symbol} {action} cancelled: {dir_desc}", flush=True)
                 action = 'NO TRADE'
@@ -3481,7 +3696,9 @@ class WeatherEnsembleBot:
         # 👑 BTC Master Beta Filter & 🔒 Portfolio Margin Cap Confirmation
         if action != 'NO TRADE' and symbol != 'BTCUSDT':
             btc_ok, btc_desc = check_btc_macro_health(action)
-            if not btc_ok and not trade_is_scalp:
+            # Scalps may bypass a directional BTC signal, but never an
+            # unavailable BTC data check.
+            if not btc_ok and (not trade_is_scalp or "unavailable" in btc_desc.lower()):
                 print(f"[FILTERED BTC MASTER] {symbol} {action} cancelled: {btc_desc}", flush=True)
                 action = 'NO TRADE'
             elif not btc_ok and trade_is_scalp:
@@ -3510,7 +3727,7 @@ class WeatherEnsembleBot:
             'neutral': neutral_count,
             'agreement_pct': round(agreement_pct, 1),
             'action': action,
-            'threshold': self.threshold,
+            'threshold': effective_threshold,
             'is_trade': action != 'NO TRADE',
             'is_quick_scalp': trade_is_scalp,
             'channel': trade_channel,
@@ -3565,6 +3782,12 @@ class WeatherEnsembleBot:
             r = requests.get(url, params=params, timeout=5)
             if r.status_code == 200:
                 raw = r.json()
+                # Binance includes the currently forming final candle.  Never
+                # calculate signals, volume, ATR, or price action from it.
+                now_ms = int(time.time() * 1000)
+                raw = [k for k in raw if len(k) > 6 and int(k[6]) <= now_ms]
+                if not raw:
+                    return None
                 data = []
                 dates = []
                 for k in raw:
@@ -4067,6 +4290,7 @@ class WeatherEnsembleBot:
 
         # BUG-14 Fix: Restore trailing stop state from disk after watchdog restart
         _load_position_targets()
+        _load_entry_timestamps()  # BUG-7 Fix: Restore entry cooldown state from disk
 
         # 🌐 IP Whitelist Pre-Flight Check on Startup
         try:
@@ -4087,11 +4311,13 @@ class WeatherEnsembleBot:
                 # 0. Refresh Global API Cache (Fetches all funding rates and BTC 15m in 2 calls)
                 GLOBAL_CACHE.update(force=True)
 
+                # BUG-8 Fix: Fetch active positions ONCE per cycle and reuse across cleaner, daemon, and evaluation
                 active_positions = get_binance_futures_positions() if self.live_trading else []
                 if active_positions is not None:
                     active_symbols = set(p['symbol'] for p in active_positions if abs(float(p.get('positionAmt', 0.0))) > 0.0)
                     active_count = len(active_symbols)
                 else:
+                    # Retain tracked targets during transient API hiccups rather than zeroing out
                     active_symbols = set(ACTIVE_POSITION_TARGETS.keys())
                     active_count = len(active_symbols)
 
@@ -4115,7 +4341,7 @@ class WeatherEnsembleBot:
 
                     df = self.fetch_binance_klines(symbol=symbol)
                     if df is not None and len(df) >= 35:
-                        res = self.evaluate_bar(df, symbol=symbol, active_count=active_count)
+                        res = self.evaluate_bar(df, symbol=symbol, active_count=active_count, positions=active_positions)
                         price = res['price']
                         consensus = res['consensus']
                         action = res['action']
@@ -4142,7 +4368,7 @@ class WeatherEnsembleBot:
 # --------------------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser(description='Weather-Ensemble 31-Model Trading AI Bot')
-    parser.add_argument('--live', action='store_true', help='Run live market monitor with Telegram alerts & C2')
+    parser.add_argument('--live', action='store_true', help='Deprecated alias for --trade-live (executes real Binance Futures orders)')
     parser.add_argument('--trade-live', action='store_true', help='Execute REAL orders on Binance Futures')
     parser.add_argument('--usdt', type=float, default=None, help='Fixed order size in USDT')
     parser.add_argument('--margin-pct', type=float, default=0.03, help='Capital fraction (default 0.03 = 3%% margin)')
@@ -4158,7 +4384,9 @@ def main():
 
     bot = WeatherEnsembleBot(
         consensus_threshold=args.threshold,
-        live_trading=args.trade_live,
+        # Keep the historical --live invocation functional; --trade-live is
+        # preferred because it makes the real-money behavior explicit.
+        live_trading=(args.live or args.trade_live),
         trade_usdt=args.usdt,
         margin_pct=args.margin_pct,
         sizing_mode=args.sizing_mode,
