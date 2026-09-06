@@ -13,7 +13,7 @@ def test_atr_band_neutrality():
     assert atr_neutral_signal(-0.20, 1.0, 0.15) == "BEARISH"
 
 
-def test_bad_atr_fails_closed():
+def test_bad_atr_fiails_closed():
     assert atr_neutral_signal(1.0, 0.0) == "NEUTRAL"
     assert atr_neutral_signal(1.0, -1.0) == "NEUTRAL"
 
