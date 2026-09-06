@@ -39,6 +39,8 @@ from trading_safety import (
     require_authoritative_positions,
     choose_authoritative_stop,
     exactly_one_protective_stop,
+    protective_stop_count,
+    protective_stop_matches,
     protective_stop_key,
     order_response_is_success,
     find_order_by_client_id,
@@ -1803,12 +1805,14 @@ def cleanup_orphaned_orders(active_positions=None):
 def check_order_book_imbalance(symbol, target_side, depth_limit=20, min_ratio=1.05):
     """
     Confirms buyer depth (bids) outweighs seller depth (asks) for LONGs, and vice versa for SHORTs.
+    Fails closed (False) when depth data is unavailable or request fails.
     """
     try:
         url = f"https://fapi.binance.com/fapi/v1/depth?symbol={symbol}&limit={depth_limit}"
         r = requests.get(url, timeout=3)
         if r.status_code != 200:
-            return True, 1.0, 0, 0
+            print(f"[ORDER BOOK WARN] #{symbol} depth HTTP {r.status_code} (Fail Closed)", flush=True)
+            return False, 0.0, 0, 0
         data = r.json()
         bids = data.get('bids', [])
         asks = data.get('asks', [])
@@ -1817,7 +1821,7 @@ def check_order_book_imbalance(symbol, target_side, depth_limit=20, min_ratio=1.
         total_ask_vol = sum(float(a[1]) for a in asks)
 
         if total_ask_vol == 0 or total_bid_vol == 0:
-            return True, 1.0, total_bid_vol, total_ask_vol
+            return False, 0.0, total_bid_vol, total_ask_vol
 
         if target_side.upper() in ['BUY', 'LONG']:
             ratio = total_bid_vol / total_ask_vol
@@ -1827,24 +1831,32 @@ def check_order_book_imbalance(symbol, target_side, depth_limit=20, min_ratio=1.
             confirmed = ratio >= min_ratio
 
         return confirmed, round(ratio, 2), total_bid_vol, total_ask_vol
-    except Exception:
-        return True, 1.0, 0, 0
+    except Exception as e:
+        print(f"[ORDER BOOK ERROR] #{symbol}: {e} (Fail Closed)", flush=True)
+        return False, 0.0, 0, 0
 
 def check_funding_rate(symbol, target_side, max_adverse_rate=0.0004):
     """
     Checks Binance Futures 8-hour funding rate using GLOBAL_CACHE (0 redundant API calls).
     Filters out entries if funding rate is heavily adverse (> +0.04% for longs or < -0.04% for shorts).
+    Fails closed (False) when funding rate data is unavailable.
     """
     try:
         GLOBAL_CACHE.update()
-        funding_rate = GLOBAL_CACHE.all_funding.get(symbol, 0.0)
+        if not hasattr(GLOBAL_CACHE, 'all_funding') or not GLOBAL_CACHE.all_funding:
+            return False, 0.0
+        funding_rate = GLOBAL_CACHE.all_funding.get(symbol)
+        if funding_rate is None:
+            return False, 0.0
+        funding_rate = float(funding_rate)
         if target_side.upper() in ['BUY', 'LONG'] and funding_rate > max_adverse_rate:
             return False, funding_rate
         elif target_side.upper() in ['SELL', 'SHORT'] and funding_rate < -max_adverse_rate:
             return False, funding_rate
         return True, funding_rate
-    except Exception:
-        return True, 0.0
+    except Exception as e:
+        print(f"[FUNDING RATE ERROR] #{symbol}: {e} (Fail Closed)", flush=True)
+        return False, 0.0
 
 def check_4h_smc_bias(symbol, target_side):
     """
@@ -1858,9 +1870,13 @@ def check_4h_smc_bias(symbol, target_side):
     try:
         # 1. Check 4H Macro Trend
         url_4h = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol}&interval=4h&limit=50"
-        r_4h = requests.get(url_4h, timeout=3.5).json()
+        res_4h = requests.get(url_4h, timeout=3.5)
+        if res_4h.status_code != 200:
+            print(f"[4H SMC WARN] #{symbol} 4H klines HTTP {res_4h.status_code} (Fail Closed)", flush=True)
+            return False, 'UNAVAILABLE 4H (Fetch Failed 🛑)'
+        r_4h = res_4h.json()
         if not isinstance(r_4h, list) or len(r_4h) < 20:
-            return True, 'NEUTRAL ⚪'
+            return False, 'UNAVAILABLE 4H (Insufficient History 🛑)'
 
         c_4h = [float(k[4]) for k in r_4h]
         ema20_4h = pd.Series(c_4h).ewm(span=20, adjust=False).mean().iloc[-1]
@@ -1872,16 +1888,18 @@ def check_4h_smc_bias(symbol, target_side):
 
         # 2. Check 1H Intermediate Trend (Pullback Completion Guard)
         url_1h = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol}&interval=1h&limit=50"
-        r_1h = requests.get(url_1h, timeout=3.5).json()
+        res_1h = requests.get(url_1h, timeout=3.5)
         is_1h_bull = False
         is_1h_bear = False
-        if isinstance(r_1h, list) and len(r_1h) >= 20:
-            c_1h = [float(k[4]) for k in r_1h]
-            ema20_1h = pd.Series(c_1h).ewm(span=20, adjust=False).mean().iloc[-1]
-            ema50_1h = pd.Series(c_1h).ewm(span=50, adjust=False).mean().iloc[-1]
-            curr_1h = c_1h[-1]
-            is_1h_bull = (curr_1h > ema50_1h) and (ema20_1h >= ema50_1h)
-            is_1h_bear = (curr_1h < ema50_1h) and (ema20_1h <= ema50_1h)
+        if res_1h.status_code == 200:
+            r_1h = res_1h.json()
+            if isinstance(r_1h, list) and len(r_1h) >= 20:
+                c_1h = [float(k[4]) for k in r_1h]
+                ema20_1h = pd.Series(c_1h).ewm(span=20, adjust=False).mean().iloc[-1]
+                ema50_1h = pd.Series(c_1h).ewm(span=50, adjust=False).mean().iloc[-1]
+                curr_1h = c_1h[-1]
+                is_1h_bull = (curr_1h > ema50_1h) and (ema20_1h >= ema50_1h)
+                is_1h_bear = (curr_1h < ema50_1h) and (ema20_1h <= ema50_1h)
 
         # 3. Dual Cascade Validation
         if target_side.upper() in ['BUY', 'LONG']:
@@ -1897,8 +1915,9 @@ def check_4h_smc_bias(symbol, target_side):
 
         bias_str = 'DUAL 4H+1H BULLISH 🟢' if (is_4h_bull and is_1h_bull) else ('DUAL 4H+1H BEARISH 🔴' if (is_4h_bear and is_1h_bear) else 'ALIGNED ✅')
         return True, bias_str
-    except Exception:
-        return True, 'NEUTRAL ⚪'
+    except Exception as e:
+        print(f"[4H SMC ERROR] #{symbol}: {e} (Fail Closed)", flush=True)
+        return False, f'UNAVAILABLE 4H (Error: {e} 🛑)'
 
 # --------------------------------------------------------------------------
 # Upgrade 1: Faster Trend Reversal Detection (Dual 1H/15m Market Structure Shift)
@@ -2527,6 +2546,25 @@ def place_binance_futures_tp_sl(symbol, side, last_price, atr, leverage=75, tota
     if isinstance(tp2_res, dict):
         tp2_order_id = tp2_res.get('id') or tp2_res.get('orderId')
 
+    # Enforce exactly-one protective stop post-condition on Binance
+    try:
+        open_algo = binance_futures_signed_request('GET', '/fapi/v1/openAlgoOrders')
+        if isinstance(open_algo, list):
+            stop_cnt = protective_stop_count(open_algo, symbol, position_side)
+            if stop_cnt > 1:
+                print(f"🚨 [STOP CARDINALITY BREACH] #{symbol} {position_side} has {stop_cnt} stops! Collapsing to single authoritative stop...", flush=True)
+                auth_stop = choose_authoritative_stop(open_algo, symbol, position_side)
+                auth_id = auth_stop.get('algoId') or auth_stop.get('orderId') if auth_stop else None
+                for a in open_algo:
+                    if protective_stop_matches(a, symbol, position_side):
+                        oid = a.get('algoId') or a.get('orderId')
+                        if oid != auth_id:
+                            cancel_binance_order_by_id(symbol, algo_id=oid)
+                if auth_id:
+                    sl_order_id = auth_id
+    except Exception as post_err:
+        print(f"[STOP CARDINALITY AUDIT WARN] #{symbol}: {post_err}", flush=True)
+
     # Record targets for Scale-Out / Dynamic Trailing Runner Daemon
     ACTIVE_POSITION_TARGETS[symbol] = {
         'side': side.upper(),
@@ -2622,18 +2660,28 @@ def _replace_protective_stop(sym, close_side, side, qty, new_stop_price, price_p
             send_telegram_msg(f"🚨🚨 <b>CRITICAL: NO STOP LOSS</b>\n\n#{sym}: new {context_label} stop AND restore both failed!\n<b>Position is NAKED — intervene immediately!</b>\nCheck <code>/positions</code>.")
             return None, placed_str
 
-    # Verify exactly one protective stop invariant
+    # Verify exactly one protective stop invariant and collapse any duplicates
     try:
         active_orders = binance_futures_signed_request('GET', '/fapi/v1/openAlgoOrders', {'symbol': sym})
         if isinstance(active_orders, list):
             if exactly_one_protective_stop(active_orders, sym, norm_side):
                 print(f"🛡️ [STOP INVARIANT VERIFIED] #{sym} exactly 1 protective stop resting on Binance ({norm_side}).", flush=True)
             else:
-                authoritative = choose_authoritative_stop(active_orders, sym, norm_side)
-                if authoritative:
-                    print(f"⚠️ [STOP INVARIANT AUDIT] #{sym} ({norm_side}) authoritative stop: #{authoritative.get('algoId')} at ${authoritative.get('triggerPrice')}.", flush=True)
-    except Exception:
-        pass
+                stop_cnt = protective_stop_count(active_orders, sym, norm_side)
+                if stop_cnt > 1:
+                    print(f"🚨 [STOP CARDINALITY BREACH] #{sym} {norm_side} has {stop_cnt} stops! Collapsing duplicates...", flush=True)
+                    authoritative = choose_authoritative_stop(active_orders, sym, norm_side)
+                    if authoritative:
+                        auth_id = authoritative.get('algoId') or authoritative.get('orderId')
+                        for a in active_orders:
+                            if protective_stop_matches(a, sym, norm_side):
+                                oid = a.get('algoId') or a.get('orderId')
+                                if oid != auth_id:
+                                    cancel_binance_order_by_id(sym, algo_id=oid)
+                        if auth_id:
+                            new_order_id = auth_id
+    except Exception as post_err:
+        print(f"[STOP CARDINALITY AUDIT WARN] #{sym}: {post_err}", flush=True)
 
     return new_order_id, placed_str
 
