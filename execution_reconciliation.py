@@ -32,6 +32,7 @@ def submit_market_order_idempotent(
     min_qty: float = 0.0,
     max_qty: Optional[float] = None,
     nonce: Optional[int] = None,
+    intent: str = "ENTRY",
 ) -> Any:
     """Submit one market order without blind duplication.
 
@@ -48,7 +49,7 @@ def submit_market_order_idempotent(
     symbol, side, quantity, _ = validate_order_request(
         symbol, side, quantity, min_qty=min_qty, max_qty=max_qty
     )
-    client_order_id = make_client_order_id(symbol, side, "ENTRY", nonce=nonce)
+    client_order_id = make_client_order_id(symbol, side, intent, nonce=nonce)
     params = {
         "symbol": symbol,
         "side": side,

@@ -42,6 +42,8 @@ from trading_safety import (
     protective_stop_key,
     order_response_is_success,
     find_order_by_client_id,
+    response_is_ambiguous,
+    should_reconcile_before_retry,
 )
 from execution_reconciliation import (
     AmbiguousOrderSubmission,
@@ -1386,7 +1388,7 @@ def get_binance_futures_positions():
 
 def get_binance_futures_open_positions_count():
     pos = get_binance_futures_positions()
-    return len(pos) if pos is not None else 0
+    return len(pos) if pos is not None else None
 
 def cancel_existing_protective_stops(symbol, position_side=None):
     """
@@ -1450,7 +1452,9 @@ def cancel_existing_protective_stops(symbol, position_side=None):
 
 def cancel_binance_symbol_all_orders(symbol):
     """
-    Cancels all open regular orders AND open conditional algo orders (Stop Loss / Take Profit) for a symbol.
+    Cancels all open regular orders AND open conditional algo orders (Stop Loss / Take Profit) for a symbol,
+    and authoritatively verifies that zero resting orders remain.
+    Returns (confirmed_clean: bool, remaining_count: int).
     """
     try:
         # 1. Cancel regular open orders
@@ -1464,8 +1468,24 @@ def cancel_binance_symbol_all_orders(symbol):
                     algo_id = a.get('algoId')
                     if algo_id:
                         binance_futures_signed_request('DELETE', '/fapi/v1/algoOrder', {'algoId': algo_id})
+
+        # 3. Confirmation check: verify no open orders remain
+        time.sleep(0.12)
+        remaining = 0
+        rem_reg = binance_futures_signed_request('GET', '/fapi/v1/openOrders', {'symbol': symbol})
+        if isinstance(rem_reg, list):
+            remaining += len(rem_reg)
+        rem_algo = binance_futures_signed_request('GET', '/fapi/v1/openAlgoOrders')
+        if isinstance(rem_algo, list):
+            remaining += sum(1 for a in rem_algo if a.get('symbol') == symbol)
+
+        if remaining > 0:
+            print(f"[CANCEL ALL ORDERS WARN] #{symbol} has {remaining} unconfirmed resting orders remaining", flush=True)
+            return False, remaining
+        return True, 0
     except Exception as e:
         print(f"[CANCEL ALL ORDERS ERROR] {symbol}: {e}", flush=True)
+        return False, -1
 
 def cancel_binance_order_by_id(symbol, order_id=None, algo_id=None):
     """
@@ -1561,12 +1581,34 @@ def place_protective_stop(symbol, close_side, position_side, qty, stop_price, pr
                 decision = classify_binance_error(res, attempt=attempt, max_attempts=max_retries)
                 if res.get('code') == -4130:
                     cancel_existing_protective_stops(symbol, position_side)
+                elif should_reconcile_before_retry(res):
+                    try:
+                        open_algo = binance_futures_signed_request('GET', '/fapi/v1/openAlgoOrders')
+                        if isinstance(open_algo, list):
+                            existing = choose_authoritative_stop(open_algo, symbol, position_side)
+                            if existing:
+                                reconciled_id = existing.get('algoId') or existing.get('orderId')
+                                print(f"[STOP RECONCILED] #{symbol} AlgoAPI timed out but stop #{reconciled_id} confirmed on Binance", flush=True)
+                                return True, reconciled_id, reconciled_id, stop_str
+                    except Exception as rec_err:
+                        print(f"[STOP RECONCILE WARN] #{symbol}: {rec_err}", flush=True)
                 if not decision.retry:
                     print(f"⚠️ [STOP REJECTED] {symbol} non-retryable AlgoAPI response ({decision.reason}). Aborting attempts.", flush=True)
                     break
         except Exception as e:
             print(f"[STOP PLACEMENT RETRY {attempt}/{max_retries}] {symbol} AlgoAPI error: {e}", flush=True)
             decision = classify_binance_error(e, attempt=attempt, max_attempts=max_retries)
+            if should_reconcile_before_retry(e):
+                try:
+                    open_algo = binance_futures_signed_request('GET', '/fapi/v1/openAlgoOrders')
+                    if isinstance(open_algo, list):
+                        existing = choose_authoritative_stop(open_algo, symbol, position_side)
+                        if existing:
+                            reconciled_id = existing.get('algoId') or existing.get('orderId')
+                            print(f"[STOP RECONCILED] #{symbol} AlgoAPI exception but stop #{reconciled_id} confirmed on Binance", flush=True)
+                            return True, reconciled_id, reconciled_id, stop_str
+                except Exception as rec_err:
+                    print(f"[STOP RECONCILE WARN] #{symbol}: {rec_err}", flush=True)
             if not decision.retry:
                 break
 
@@ -1577,7 +1619,7 @@ def place_protective_stop(symbol, close_side, position_side, qty, stop_price, pr
     return False, None, None, stop_str
 
 def close_binance_futures_position(symbol):
-    """Emergency closes a specific open position and cancels all remaining orders"""
+    """Emergency closes a specific open position and cancels all remaining orders with idempotent reconciliation."""
     positions = get_binance_futures_positions()
     if positions is None:
         return {'error': 'Position state unavailable; refusing emergency close/order cancellation'}
@@ -1594,17 +1636,67 @@ def close_binance_futures_position(symbol):
     close_side = 'SELL' if target['positionAmt'] > 0 else 'BUY'
     # Bug #2 Fix: Use positionSide for Hedge Mode compatibility
     position_side = 'LONG' if target['positionAmt'] > 0 else 'SHORT'
-    
-    params = {
-        'symbol': symbol,
-        'side': close_side,
-        'type': 'MARKET',
-        'quantity': str(amt),
-        'positionSide': position_side
-    }
-    res = binance_futures_signed_request('POST', '/fapi/v1/order', params)
+
+    def _submit_close(order_params):
+        p = dict(order_params)
+        p['positionSide'] = position_side
+        p['quantity'] = str(amt)
+        return binance_futures_signed_request('POST', '/fapi/v1/order', p)
+
+    def _reconcile_close(client_id):
+        # 1. Authoritative direct query by origClientOrderId
+        try:
+            order_res = binance_futures_signed_request('GET', '/fapi/v1/order', {
+                'symbol': symbol,
+                'origClientOrderId': client_id
+            })
+            if order_response_is_success(order_res):
+                return order_res
+        except Exception as e:
+            print(f"[CLOSE RECONCILE WARN] Direct query failed for #{symbol} ({client_id}): {e}", flush=True)
+
+        # 2. Fallback query: Check open orders for symbol
+        try:
+            open_res = binance_futures_signed_request('GET', '/fapi/v1/openOrders', {'symbol': symbol})
+            if isinstance(open_res, list):
+                match = find_order_by_client_id(open_res, client_id)
+                if match is not None:
+                    return match
+        except Exception as e:
+            print(f"[CLOSE RECONCILE WARN] Open orders query failed for #{symbol} ({client_id}): {e}", flush=True)
+
+        return None
+
+    try:
+        res = submit_market_order_idempotent(
+            symbol=symbol,
+            side=close_side,
+            quantity=float(amt),
+            submit=_submit_close,
+            reconcile=_reconcile_close,
+            intent="CLOSE"
+        )
+    except AmbiguousOrderSubmission as e:
+        print(f"🚨 [AMBIGUOUS CLOSE ERROR] #{symbol} {close_side}: {e}", flush=True)
+        try:
+            send_telegram_msg(
+                f"🚨 <b>AMBIGUOUS EMERGENCY CLOSE</b>\n\n"
+                f"• Asset: <b>#{symbol}</b> ({close_side})\n"
+                f"• Details: <i>{e}</i>\n\n"
+                f"⚠️ Automated retry blocked. Protective orders preserved. Manual intervention required."
+            )
+        except Exception:
+            pass
+        return {'error': 'Ambiguous close submission', 'details': str(e)}
+    except InvalidOrderRequest as e:
+        print(f"🚨 [INVALID CLOSE REQUEST] #{symbol} {close_side} rejected: {e}", flush=True)
+        return {'error': 'Invalid close request parameters', 'details': str(e)}
+    except Exception as e:
+        print(f"🚨 [CLOSE SUBMISSION EXCEPTION] #{symbol} {close_side}: {e}", flush=True)
+        return {'error': f'Close submission failed: {e}'}
+
     # Never remove SL/TP until Binance has explicitly accepted the close.
-    if isinstance(res, dict) and res.get('orderId') is not None and res.get('code') is None:
+    if order_response_is_success(res):
         cancel_binance_symbol_all_orders(symbol)
     else:
         print(f"[EMERGENCY CLOSE WARN] {symbol} close was not accepted; preserving protective orders: {res}", flush=True)
@@ -4020,12 +4112,14 @@ class WeatherEnsembleBot:
                 mode_str = "🟢 REAL BINANCE FUTURES" if self.live_trading else "🟡 PAPER MONITOR (Signals Only)"
                 active_cnt = get_binance_futures_open_positions_count()
 
+                pos_disp = f"{active_cnt}" if active_cnt is not None else "⚠️ Unavailable"
+
                 msg = (
                     f"📊 <b>ENGINE STATUS & WALLET REPORT</b>\n\n"
                     f"<b>Trading Mode:</b> {mode_str}\n"
                     f"<b>Engine State:</b> {status_str}\n"
                     f"<b>Binance Futures USDT Balance:</b> ${usdt_bal:,.2f}\n"
-                    f"<b>Open Positions:</b> {active_cnt} / {self.max_active_positions} (Max {self.max_directional_cap} same-side)\n"
+                    f"<b>Open Positions:</b> {pos_disp} / {self.max_active_positions} (Max {self.max_directional_cap} same-side)\n"
                     f"<b>Position Sizing:</b> {self.margin_pct * 100:.1f}% Capital (${usdt_bal * self.margin_pct:,.2f} Margin @ {self.leverage}x)\n"
                     f"<b>Consensus Threshold:</b> ≥ <b>{self.threshold} / 31 Models</b>\n"
                     f"<b>Circuit Breaker:</b> {'🛑 TRIPPED' if CIRCUIT_BREAKER.circuit_tripped else '🟢 HEALTHY'}\n"

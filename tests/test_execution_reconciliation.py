@@ -22,6 +22,23 @@ def test_successful_submission_uses_client_order_id():
     assert calls[0]["newClientOrderId"].startswith("ATLAS_BTCUSDT_BUY_ENTRY_")
 
 
+def test_submission_supports_custom_intent_like_close():
+    calls = []
+
+    def submit(params):
+        calls.append(params)
+        return {"orderId": 321, "clientOrderId": params["newClientOrderId"]}
+
+    result = submit_market_order_idempotent(
+        symbol="ETHUSDT", side="SELL", quantity=0.01,
+        submit=submit, reconcile=lambda _id: None, nonce=999,
+        intent="CLOSE"
+    )
+
+    assert result["orderId"] == 321
+    assert calls[0]["newClientOrderId"].startswith("ATLAS_ETHUSDT_SELL_CLOSE_")
+
+
 def test_ambiguous_submission_reconciles_before_retry():
     submissions = []
     reconciliations = []
@@ -144,3 +161,109 @@ def test_place_binance_futures_market_order_wires_client_order_id(monkeypatch):
     assert sent_params["type"] == "MARKET"
     assert "newClientOrderId" in sent_params
     assert sent_params["newClientOrderId"].startswith("ATLAS_BTCUSDT_BUY_ENTRY_")
+
+
+def test_close_binance_futures_position_wires_client_order_id_with_close_intent(monkeypatch):
+    import main
+
+    signed_requests = []
+
+    def fake_signed_request(method, endpoint, params=None, max_retries=3):
+        signed_requests.append((method, endpoint, dict(params or {})))
+        if method == "POST" and endpoint == "/fapi/v1/order":
+            return {
+                "orderId": 888456,
+                "symbol": params.get("symbol"),
+                "status": "FILLED",
+                "clientOrderId": params.get("newClientOrderId")
+            }
+        elif method == "DELETE":
+            return {"code": 200, "msg": "success"}
+        elif method == "GET" and endpoint in ("/fapi/v1/openOrders", "/fapi/v1/openAlgoOrders"):
+            return []
+        return {}
+
+    monkeypatch.setattr(main, "binance_futures_signed_request", fake_signed_request)
+    monkeypatch.setattr(main, "get_binance_futures_positions", lambda: [
+        {"symbol": "ETHUSDT", "positionAmt": 1.5, "markPrice": 2500.0}
+    ])
+
+    res = main.close_binance_futures_position("ETHUSDT")
+
+    assert res.get("orderId") == 888456
+    order_post = [r for r in signed_requests if r[0] == "POST" and r[1] == "/fapi/v1/order"][0]
+    sent_params = order_post[2]
+    assert sent_params["symbol"] == "ETHUSDT"
+    assert sent_params["side"] == "SELL"
+    assert sent_params["positionSide"] == "LONG"
+    assert sent_params["quantity"] == "1.5"
+    assert sent_params["newClientOrderId"].startswith("ATLAS_ETHUSDT_SELL_CLOSE_")
+
+
+def test_get_binance_futures_open_positions_count_fail_closed(monkeypatch):
+    import main
+
+    monkeypatch.setattr(main, "get_binance_futures_positions", lambda: None)
+    assert main.get_binance_futures_open_positions_count() is None
+
+    monkeypatch.setattr(main, "get_binance_futures_positions", lambda: [])
+    assert main.get_binance_futures_open_positions_count() == 0
+
+    monkeypatch.setattr(main, "get_binance_futures_positions", lambda: [{"symbol": "BTCUSDT"}])
+    assert main.get_binance_futures_open_positions_count() == 1
+
+
+def test_cancel_binance_symbol_all_orders_verifies_clean(monkeypatch):
+    import main
+
+    def fake_signed_request(method, endpoint, params=None, max_retries=3):
+        if method == "DELETE":
+            return {"code": 200}
+        if method == "GET" and endpoint == "/fapi/v1/openOrders":
+            return []
+        if method == "GET" and endpoint == "/fapi/v1/openAlgoOrders":
+            return []
+        return []
+
+    monkeypatch.setattr(main, "binance_futures_signed_request", fake_signed_request)
+    clean, rem = main.cancel_binance_symbol_all_orders("BTCUSDT")
+    assert clean is True
+    assert rem == 0
+
+
+def test_place_protective_stop_reconciles_timeout(monkeypatch):
+    import main
+
+    # Simulate CCXT timeout, then Algo API timeout, but openAlgoOrders reveals stop was placed
+    def fake_exchange():
+        class FakeEx:
+            def create_order(self, *a, **kw):
+                raise TimeoutError("CCXT timeout")
+        return FakeEx()
+
+    calls = []
+    def fake_signed_request(method, endpoint, params=None, max_retries=3):
+        calls.append((method, endpoint))
+        if method == "POST" and endpoint == "/fapi/v1/algoOrder":
+            return {"error": "request timeout"}
+        if method == "GET" and endpoint == "/fapi/v1/openAlgoOrders":
+            return [{
+                "symbol": "BTCUSDT",
+                "positionSide": "LONG",
+                "type": "STOP_MARKET",
+                "closePosition": True,
+                "algoId": 999111,
+                "updateTime": 500
+            }]
+        return []
+
+    monkeypatch.setattr(main, "get_ccxt_exchange", fake_exchange)
+    monkeypatch.setattr(main, "to_ccxt_symbol", lambda s: "BTC/USDT:USDT")
+    monkeypatch.setattr(main, "binance_futures_signed_request", fake_signed_request)
+
+    success, oid, algo_id, stop_str = main.place_protective_stop(
+        symbol="BTCUSDT", close_side="SELL", position_side="LONG", qty=0.1, stop_price=55000.0, price_prec=2, max_retries=1
+    )
+
+    assert success is True
+    assert algo_id == 999111
