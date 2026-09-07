@@ -1,0 +1,1 @@
+V9.1 research-only policy audit: prune LIQUIDITY_SWEEP and EXHAUSTION_REVERSAL; gate RANGE and CHOP; require Fib confirmation; tier assets; test 2.5 ATR trend target. Production wiring is prohibited until OOS and cost-stress validation pass.
