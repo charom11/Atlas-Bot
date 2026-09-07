@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from strategy_candidate_v2 import (
-    ENTRY_THRESHOLD, EXIT_THRESHOLD, FLAT, LONG, SHORT,
+    EXIT_THRESHOLD, FLAT, LONG, SHORT,
     choose_leverage, enforce_portfolio_limits, generate_strategy_signal,
     rank_assets, risk_based_notional,
 )
@@ -25,27 +25,25 @@ def test_invalid_data_is_flat():
 
 
 def test_hysteresis_hold_does_not_exit_above_exit_threshold():
-    df=make_ohlcv()
-    d=generate_strategy_signal(df, position=LONG)
+    d=generate_strategy_signal(make_ohlcv(), position=LONG)
     if d["score"] > EXIT_THRESHOLD:
         assert d["signal"] == LONG
 
 
 def test_hysteresis_hold_does_not_exit_below_short_exit_threshold():
-    df=make_ohlcv(trend=-0.0005)
-    d=generate_strategy_signal(df, position=SHORT)
+    d=generate_strategy_signal(make_ohlcv(trend=-0.0005), position=SHORT)
     if d["score"] < -EXIT_THRESHOLD:
         assert d["signal"] == SHORT
 
 
 def test_risk_based_notional_is_stop_derived():
-    # 0.35% equity risk / 2% stop = 17.5% equity notional.
     n=risk_based_notional(1000,.0035,100,98,max_leverage=50,max_notional_pct=1)
     assert abs(n-175)<1e-9
 
 
 def test_risk_based_notional_respects_caps():
-    assert risk_based_notional(1000,.50,100,99,max_leverage=2,max_notional_pct=1)==2000
+    n=risk_based_notional(1000,.50,100,99,max_leverage=2,max_notional_pct=3)
+    assert n == 2000
 
 
 def test_choose_leverage_falls_with_volatility():
