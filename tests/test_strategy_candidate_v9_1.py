@@ -59,3 +59,46 @@ def test_audit_summary_is_explicitly_research_only():
     assert summary["range_allowed"] is False
     assert summary["chop_allowed"] is False
     assert summary["fib_requires_confirmation"] is True
+
+
+def test_v91_backtest_frame_disallowed_asset_returns_empty():
+    from strategy_candidate_v9_1 import backtest_frame
+    import pandas as pd
+    import numpy as np
+
+    idx = pd.date_range("2025-01-01", periods=300, freq="15min", tz="UTC")
+    df = pd.DataFrame({
+        "open": np.full(300, 100.0),
+        "high": np.full(300, 101.0),
+        "low": np.full(300, 99.0),
+        "close": np.full(300, 100.0),
+        "volume": np.full(300, 1000.0),
+        "symbol": "AVAXUSDT",
+    }, index=idx)
+    # Default V91Config disallows Tier 3 (AVAXUSDT)
+    trades = backtest_frame(df, config=V91Config())
+    assert trades == []
+
+
+def test_v91_backtest_frame_allowed_asset_executes():
+    from strategy_candidate_v9_1 import backtest_frame
+    import pandas as pd
+    import numpy as np
+
+    n = 350
+    idx = pd.date_range("2025-01-01", periods=n, freq="15min", tz="UTC")
+    base = 100 * np.exp(np.arange(n) * 0.0005)
+    df = pd.DataFrame({
+        "open": base - 0.05,
+        "high": base + 0.35,
+        "low": base - 0.35,
+        "close": base,
+        "volume": np.full(n, 1000.0),
+        "symbol": "SOLUSDT",
+    }, index=idx)
+    trades = backtest_frame(df, config=V91Config())
+    assert isinstance(trades, list)
+    for t in trades:
+        assert t.symbol == "SOLUSDT"
+        assert t.setup not in PRUNED_SETUPS
+
