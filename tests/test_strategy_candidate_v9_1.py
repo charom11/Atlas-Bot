@@ -12,8 +12,13 @@ def test_range_and_chop_are_hard_gated():
 
 
 def test_fib_requires_structural_confirmation():
-    assert not confirmation_ok("FIB_OTE", {"FIB_OTE": LONG, "MSS_SHIFT": 0, "TREND_CONTINUATION": 0})
+    assert not confirmation_ok("FIB_OTE", {"FIB_OTE": LONG, "MSS_SHIFT": 0, "TREND_CONTINUATION": 0, "PULLBACK_CONTINUATION": 0})
     assert confirmation_ok("FIB_OTE", {"FIB_OTE": LONG, "MSS_SHIFT": LONG})
+
+
+def test_non_fib_setup_only_requires_its_own_vote():
+    assert not confirmation_ok("MSS_SHIFT", {"MSS_SHIFT": 0})
+    assert confirmation_ok("MSS_SHIFT", {"MSS_SHIFT": LONG})
 
 
 def test_asset_tiering_defaults_to_tier1_and_tier2():
@@ -36,6 +41,10 @@ def test_high_vol_can_be_disabled_without_changing_other_regimes():
 
 def test_mild_trend_can_be_disabled():
     assert allowed_setups("MILD_TREND", V91Config(allow_mild_trend=False)) == set()
+
+
+def test_fibonacci_can_be_disabled():
+    assert "FIB_OTE" not in allowed_setups("STRONG_TREND", V91Config(allow_fibonacci=False))
 
 
 def test_target_calibration_only_changes_trend_continuation():
