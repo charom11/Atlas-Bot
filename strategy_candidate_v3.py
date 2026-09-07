@@ -40,7 +40,7 @@ STRUCTURE_LOOKBACK = 20
 STOP_ATR_BUFFER = 0.25
 MAX_STOP_ATR = 4.5
 MAX_STOP_PCT = 0.06
-DEFAULT_RISK_PCT = 0.0035
+DEFAULT_RISK_PCT = 0.035
 DEFAULT_MAX_LEVERAGE = 10.0
 
 @dataclass(frozen=True)
@@ -137,7 +137,7 @@ def _pct(v: float) -> float:
 def structure_stop(df: pd.DataFrame, side: str, atr: Optional[float] = None, lookback: int = STRUCTURE_LOOKBACK, buffer_atr: float = STOP_ATR_BUFFER) -> float:
     """Return a stop beyond recent structure and EMA50; no exchange calls."""
     if not _valid(df): return 0.0
-    c=df["close"].astype(float); a=float(_atr(df).iloc[-1] if atr is None else atr); e50=float(c.ewm(span=50,adjust=False).iloc[-1])
+    c=df["close"].astype(float); a=float(_atr(df).iloc[-1] if atr is None else atr); e50=float(c.ewm(span=50,adjust=False).mean().iloc[-1])
     if not math.isfinite(a) or a<=0: return 0.0
     if side==LONG:
         swing=float(df["low"].astype(float).rolling(lookback).min().iloc[-1])
