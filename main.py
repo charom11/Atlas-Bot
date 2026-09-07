@@ -2074,24 +2074,22 @@ def check_macro_and_mss_bias(symbol, target_side, df=None, micro_context=None):
     side = target_side.upper()
     is_macro_aligned, macro_desc = check_4h_smc_bias(symbol, target_side)
     
-    # 0. Potato S&R Floor / Ceiling & MTF Divergence Counter-Trend Bypass
+    # Strictly enforce 4H SMC Macro Trend (Counter-trend Quick Scalps Disabled)
+    if not is_macro_aligned:
+        return False, f"Counter-Macro Trend Blocked ({macro_desc})", False
+
+    # 0. Potato S&R Floor / Ceiling & MTF Divergence
     if micro_context in ['POTATO_SUPPORT', 'POTATO_RESISTANCE', 'BULL_DIV', 'BEAR_DIV']:
-        is_scalp = not is_macro_aligned
-        scalp_tag = "⚡ QUICK SCALP" if is_scalp else "🌊 TREND RUNNER"
         side_tag = "Floor Bounce 🟢" if side in ['BUY', 'LONG'] else "Ceiling Rejection 🔴"
         context_name = "Potato S&R" if "POTATO" in micro_context else "Divergence"
-        return True, f"{context_name} {side_tag} ({scalp_tag} | Macro: {macro_desc})", is_scalp
+        return True, f"{context_name} {side_tag} (🌊 TREND RUNNER | Macro: {macro_desc})", False
 
     # 1. Check 1H MSS First for Intermediate Structure Shift
     mss_1h = detect_1h_mss_from_api(symbol)
     if mss_1h == 'BEARISH' and side in ['SELL', 'SHORT']:
-        is_scalp = not is_macro_aligned
-        scalp_tag = "⚡ QUICK SCALP" if is_scalp else "🌊 TREND RUNNER"
-        return True, f"BEARISH ({scalp_tag}: 1H MSS Reversal Confirmed 🔴)", is_scalp
+        return True, f"BEARISH (🌊 TREND RUNNER: 1H MSS Reversal Confirmed 🔴)", False
     elif mss_1h == 'BULLISH' and side in ['BUY', 'LONG']:
-        is_scalp = not is_macro_aligned
-        scalp_tag = "⚡ QUICK SCALP" if is_scalp else "🌊 TREND RUNNER"
-        return True, f"BULLISH ({scalp_tag}: 1H MSS Reversal Confirmed 🟢)", is_scalp
+        return True, f"BULLISH (🌊 TREND RUNNER: 1H MSS Reversal Confirmed 🟢)", False
     elif mss_1h == 'BEARISH' and side in ['BUY', 'LONG']:
         return False, 'BEARISH (1H Market Structure Shift Reversal Broken Down 🛑)', False
     elif mss_1h == 'BULLISH' and side in ['SELL', 'SHORT']:
@@ -2102,32 +2100,20 @@ def check_macro_and_mss_bias(symbol, target_side, df=None, micro_context=None):
     micro_bias, micro_reason = detect_micro_bias(symbol, df=df)
     
     if side in ['SELL', 'SHORT']:
-        # If Micro is BEARISH on lower timeframe, ALLOW SHORTING
         if micro_bias == 'BEARISH':
-            is_scalp = not is_macro_aligned
-            scalp_tag = "⚡ QUICK SCALP" if is_scalp else "🌊 TREND RUNNER"
-            return True, f"MICRO BEARISH ({scalp_tag}: {micro_reason} 🔴)", is_scalp
+            return True, f"MICRO BEARISH (🌊 TREND RUNNER: {micro_reason} 🔴)", False
         
-        # If micro context indicates a specific setup and micro is not bullish
         if micro_context in ['FIBONACCI', 'CONSENSUS'] and micro_bias != 'BULLISH':
-            is_scalp = not is_macro_aligned
-            scalp_tag = "⚡ QUICK SCALP" if is_scalp else "🌊 TREND RUNNER"
-            return True, f"MICRO BEARISH ({scalp_tag}: LTF {micro_context} Short Setup Confirmed 🎯🔴)", is_scalp
+            return True, f"MICRO BEARISH (🌊 TREND RUNNER: LTF {micro_context} Short Setup Confirmed 🎯🔴)", False
             
     elif side in ['BUY', 'LONG']:
-        # If Micro is BULLISH on lower timeframe, ALLOW BUYING
         if micro_bias == 'BULLISH':
-            is_scalp = not is_macro_aligned
-            scalp_tag = "⚡ QUICK SCALP" if is_scalp else "🌊 TREND RUNNER"
-            return True, f"MICRO BULLISH ({scalp_tag}: {micro_reason} 🟢)", is_scalp
+            return True, f"MICRO BULLISH (🌊 TREND RUNNER: {micro_reason} 🟢)", False
             
-        # If micro context indicates a specific setup and micro is not bearish
         if micro_context in ['FIBONACCI', 'CONSENSUS'] and micro_bias != 'BEARISH':
-            is_scalp = not is_macro_aligned
-            scalp_tag = "⚡ QUICK SCALP" if is_scalp else "🌊 TREND RUNNER"
-            return True, f"MICRO BULLISH ({scalp_tag}: LTF {micro_context} Long Setup Confirmed 🎯🟢)", is_scalp
+            return True, f"MICRO BULLISH (🌊 TREND RUNNER: LTF {micro_context} Long Setup Confirmed 🎯🟢)", False
 
-    # 3. Fallback to 4H SMC Macro Bias if no micro signal exists
+    # 3. Fallback to 4H SMC Macro Bias
     return is_macro_aligned, macro_desc, False
 
 # --------------------------------------------------------------------------
@@ -3692,22 +3678,11 @@ class WeatherEnsembleBot:
         time_since_trade = time.time() - last_traded_ts
         is_in_cooldown = time_since_trade < dynamic_cooldown_sec
 
-        # Distinct Position Slots: Quick Scalp vs Swing Trade (Can be toggled or scaled)
+        # Distinct Position Slots: Quick Scalp Disabled (100% capacity allocated to Swing / Trend Runners)
         scalp_active = sum(1 for s, t in ACTIVE_POSITION_TARGETS.items() if t.get('is_quick_scalp'))
         swing_active = sum(1 for s, t in ACTIVE_POSITION_TARGETS.items() if not t.get('is_quick_scalp'))
-        if not getattr(self, 'scalp_cap_enabled', True):
-            # Scalp Cap is OFF: Unified pool, any setup can take any free slot up to max_active_positions
-            max_scalp_slots = self.max_active_positions
-            max_swing_slots = self.max_active_positions
-        else:
-            configured_scalp = getattr(self, 'max_scalp_slots', None)
-            if configured_scalp is not None:
-                max_scalp_slots = configured_scalp
-                max_swing_slots = max(1, self.max_active_positions - max_scalp_slots + 1)
-            else:
-                # Dynamic scaling with max_active_positions instead of fixed 2 (e.g. 3 of 5, or 6 of 10)
-                max_scalp_slots = max(2, int(self.max_active_positions * 0.6))
-                max_swing_slots = max(2, self.max_active_positions - max_scalp_slots + 1)
+        max_scalp_slots = 0
+        max_swing_slots = self.max_active_positions
 
         trade_channel = 'CONSENSUS'
         if not self.paused and not CIRCUIT_BREAKER.circuit_tripped and regime_data_available and active_count < self.max_active_positions and not is_in_cooldown:
@@ -3718,16 +3693,15 @@ class WeatherEnsembleBot:
                 if fib_aligned:
                     smc_4h_ok, smc_bias_desc, is_scalp = check_macro_and_mss_bias(symbol, target_side, df=df, micro_context='FIBONACCI')
                     core_ok, core_desc, ob_ratio, of_desc_core = self._check_core_entry_gates(symbol, target_side, df)
-                    slot_available = (scalp_active < max_scalp_slots) if is_scalp else (swing_active < max_swing_slots)
+                    slot_available = swing_active < max_swing_slots
 
                     if not slot_available:
-                        slot_type = "Quick Scalp" if is_scalp else "Swing Trade"
-                        print(f"[FILTERED SLOTS] {symbol} {target_side} Fib valid but Max {slot_type} slots reached ({scalp_active}/{max_scalp_slots} scalps, {swing_active}/{max_swing_slots} swings).", flush=True)
+                        print(f"[FILTERED SLOTS] {symbol} {target_side} Fib valid but Max Swing slots reached ({swing_active}/{max_swing_slots}).", flush=True)
                     elif smc_4h_ok and core_ok:
                         action = target_side
                         trade_channel = 'FIBONACCI'
-                        trade_is_scalp = is_scalp
-                        trade_custom_tp = fib_info['tp1'] if is_scalp else fib_info['tp2']
+                        trade_is_scalp = False
+                        trade_custom_tp = fib_info['tp2']
                         trade_custom_sl = fib_info['sl']
                         of_desc = fib_info['desc']
                         print(f"[FIBONACCI {fib_info.get('tier', 'HARMONIC').upper()} AUTO-{target_side}] {symbol} -> Entry: ${fib_info.get('entry_price', last_price):.4f} | TP: ${trade_custom_tp:.4f} | SL: ${trade_custom_sl:.4f} (R:R {fib_info.get('rr', 0):.2f}) 📐", flush=True)
@@ -3804,15 +3778,14 @@ class WeatherEnsembleBot:
                 else:
                     core_ok, core_desc, ob_ratio, of_desc_core = self._check_core_entry_gates(symbol, target_side, df)
                     smc_4h_ok, smc_bias_desc, is_scalp = check_macro_and_mss_bias(symbol, target_side, df=df, micro_context='CONSENSUS')
-                    slot_available = (scalp_active < max_scalp_slots) if is_scalp else (swing_active < max_swing_slots)
+                    slot_available = swing_active < max_swing_slots
 
                     if not slot_available:
-                        slot_type = "Quick Scalp" if is_scalp else "Swing Trade"
-                        print(f"[FILTERED SLOTS] {symbol} {target_side} consensus reached but Max {slot_type} slots reached.", flush=True)
+                        print(f"[FILTERED SLOTS] {symbol} {target_side} consensus reached but Max Swing slots reached ({swing_active}/{max_swing_slots}).", flush=True)
                     elif core_ok and smc_4h_ok and is_vol_surge and is_atr_expanded:
                         action = target_side
                         trade_channel = '5MA_CONSENSUS'
-                        trade_is_scalp = is_scalp
+                        trade_is_scalp = False
                         if target_side == 'BUY':
                             trade_custom_tp = last_price + (2.0 * atr14_val)
                             trade_custom_sl = ema50_val - (0.5 * atr14_val)
@@ -3838,21 +3811,20 @@ class WeatherEnsembleBot:
                 micro_ctx = 'POTATO_SUPPORT' if target_side == 'BUY' else 'POTATO_RESISTANCE'
                 smc_4h_ok, smc_bias_desc, is_scalp = check_macro_and_mss_bias(symbol, target_side, df=df, micro_context=micro_ctx)
                 core_ok, core_desc, ob_ratio, of_desc_core = self._check_core_entry_gates(symbol, target_side, df, is_sr_bounce=True)
-                slot_available = (scalp_active < max_scalp_slots) if is_scalp else (swing_active < max_swing_slots)
+                slot_available = swing_active < max_swing_slots
 
                 if not slot_available:
-                    slot_type = "Quick Scalp" if is_scalp else "Swing Trade"
-                    print(f"[FILTERED SLOTS] {symbol} {target_side} Potato S&R setup valid but Max {slot_type} slots reached.", flush=True)
+                    print(f"[FILTERED SLOTS] {symbol} {target_side} Potato S&R setup valid but Max Swing slots reached ({swing_active}/{max_swing_slots}).", flush=True)
                 elif smc_4h_ok and core_ok:
                     action = target_side
                     trade_channel = 'POTATO_SR'
-                    trade_is_scalp = is_scalp
+                    trade_is_scalp = False
                     if target_side == 'BUY':
-                        trade_custom_sl = last_price - (1.0 * atr14_val)
-                        trade_custom_tp = last_price + (1.5 * atr14_val)
+                        trade_custom_sl = last_price - (1.5 * atr14_val)
+                        trade_custom_tp = last_price + (2.0 * atr14_val)
                     else:
-                        trade_custom_sl = last_price + (1.0 * atr14_val)
-                        trade_custom_tp = last_price - (1.5 * atr14_val)
+                        trade_custom_sl = last_price + (1.5 * atr14_val)
+                        trade_custom_tp = last_price - (2.0 * atr14_val)
                     of_desc = f"🥔 Potato S&R ({potato_state}) | Supp: ${potato_info.get('support', 0):.4f} | Res: ${potato_info.get('resistance', 0):.4f}"
                     print(f"[POTATO S&R AUTO-{target_side}] {symbol} ({potato_state}) -> TP: ${trade_custom_tp:.4f} | SL: ${trade_custom_sl:.4f} 🥔🎯", flush=True)
                 else:
@@ -3867,21 +3839,20 @@ class WeatherEnsembleBot:
                 micro_ctx = 'BULL_DIV' if bull_div else 'BEAR_DIV'
                 smc_4h_ok, smc_bias_desc, is_scalp = check_macro_and_mss_bias(symbol, target_side, df=df, micro_context=micro_ctx)
                 core_ok, core_desc, ob_ratio, of_desc_core = self._check_core_entry_gates(symbol, target_side, df, is_sr_bounce=True)
-                slot_available = (scalp_active < max_scalp_slots) if is_scalp else (swing_active < max_swing_slots)
+                slot_available = swing_active < max_swing_slots
 
                 if not slot_available:
-                    slot_type = "Quick Scalp" if is_scalp else "Swing Trade"
-                    print(f"[FILTERED SLOTS] {symbol} {target_side} Triple Divergence valid but Max {slot_type} slots reached.", flush=True)
+                    print(f"[FILTERED SLOTS] {symbol} {target_side} Triple Divergence valid but Max Swing slots reached ({swing_active}/{max_swing_slots}).", flush=True)
                 elif smc_4h_ok and core_ok:
                     action = target_side
                     trade_channel = 'DIVERGENCE'
-                    trade_is_scalp = is_scalp
+                    trade_is_scalp = False
                     if target_side == 'BUY':
-                        trade_custom_tp = last_price + (1.8 * atr14_val)
-                        trade_custom_sl = last_price - (1.0 * atr14_val)
+                        trade_custom_tp = last_price + (2.0 * atr14_val)
+                        trade_custom_sl = last_price - (1.5 * atr14_val)
                     else:
-                        trade_custom_tp = last_price - (1.8 * atr14_val)
-                        trade_custom_sl = last_price + (1.0 * atr14_val)
+                        trade_custom_tp = last_price - (2.0 * atr14_val)
+                        trade_custom_sl = last_price + (1.5 * atr14_val)
                     of_desc = f"⚡ Triple Divergence ({div_state}) | RSI+CCI+MACD Confluence 🌊"
                     print(f"[TRIPLE DIVERGENCE AUTO-{target_side}] {symbol} ({div_state}) -> TP: ${trade_custom_tp:.4f} | SL: ${trade_custom_sl:.4f} ⚡🎯", flush=True)
                 else:
@@ -3918,16 +3889,15 @@ class WeatherEnsembleBot:
             risk_d = abs(calc_ref_price - trade_custom_sl)
             reward_d = abs(trade_custom_tp - calc_ref_price)
             rr_ratio = reward_d / (risk_d + 1e-9)
-            scalp_rr_check = True if trade_channel in ['POTATO_SR', 'DIVERGENCE'] else trade_is_scalp
-            min_rr = JANUS_REGIME.get_adaptive_rr(adx_val, is_trending, is_scalp=scalp_rr_check)
+            min_rr = JANUS_REGIME.get_adaptive_rr(adx_val, is_trending, is_scalp=False)
             if rr_ratio < min_rr:
                 print(f"[FILTERED R:R RATIO] {symbol} {action} cancelled: Structural R:R {rr_ratio:.2f} < {min_rr}x minimum requirement (JANUS Adaptive).", flush=True)
                 action = 'NO TRADE'
 
-        # ADX(14) Anti-Chop Gate (Pause trend-following entries when ADX < 22.0, allow scalps & S&R bounces)
+        # ADX(14) Anti-Chop Gate (Pause trend-following entries when ADX < 22.0, allow S&R bounces)
         if action != 'NO TRADE' and len(df) >= 30:
             sym_adx = calc_adx_series(df['high'].values, df['low'].values, df['close'].values, period=14)
-            if sym_adx < 22.0 and not trade_is_scalp and trade_channel not in ['POTATO_SR', 'DIVERGENCE']:
+            if sym_adx < 22.0 and trade_channel not in ['POTATO_SR', 'DIVERGENCE']:
                 print(f"[FILTERED ADX CHOP] {symbol} {action} cancelled: Symbol ADX({sym_adx:.1f}) < 22.0 (Market in Chop Zone 🛑)", flush=True)
                 action = 'NO TRADE'
 
@@ -3941,13 +3911,9 @@ class WeatherEnsembleBot:
         # 👑 BTC Master Beta Filter & 🔒 Portfolio Margin Cap Confirmation
         if action != 'NO TRADE' and symbol != 'BTCUSDT':
             btc_ok, btc_desc = check_btc_macro_health(action)
-            # Scalps may bypass a directional BTC signal, but never an
-            # unavailable BTC data check.
-            if not btc_ok and (not trade_is_scalp or "unavailable" in btc_desc.lower()):
+            if not btc_ok:
                 print(f"[FILTERED BTC MASTER] {symbol} {action} cancelled: {btc_desc}", flush=True)
                 action = 'NO TRADE'
-            elif not btc_ok and trade_is_scalp:
-                print(f"[BTC MASTER BYPASS - QUICK SCALP] {symbol} {action} allowed as Counter-Trend Scalp despite ({btc_desc})", flush=True)
 
         if action != 'NO TRADE' and self.live_trading:
             usdt_bal = get_binance_futures_usdt_balance()
@@ -3974,9 +3940,9 @@ class WeatherEnsembleBot:
             'action': action,
             'threshold': effective_threshold,
             'is_trade': action != 'NO TRADE',
-            'is_quick_scalp': trade_is_scalp,
+            'is_quick_scalp': False,
             'channel': trade_channel,
-            'trade_mode': "⚡ QUICK SCALP (Counter-Macro Reversal)" if trade_is_scalp else "🌊 TREND RUNNER (With-Macro Continuation)",
+            'trade_mode': "🌊 TREND RUNNER (With-Macro Continuation)",
             'of_desc': of_desc if 'of_desc' in locals() else 'Delta Confirmed'
         }
         self.ledger.append(entry)
@@ -3991,8 +3957,7 @@ class WeatherEnsembleBot:
                 atr_val = self.calc_atr(df, 14).iloc[-1] if len(df) >= 14 else (last_price * 0.005)
                 # 🧬 ATLAS Darwinian Dynamic Margin Multiplier
                 darwin_mult = ATLAS_DARWINIAN.get_multiplier(trade_channel)
-                # Quick Scalps use a tighter risk budget (67% of base margin), Swings use standard swing margin
-                base_margin = (self.margin_pct * 0.67) if trade_is_scalp else self.margin_pct
+                base_margin = self.margin_pct
                 effective_margin_pct = base_margin * darwin_mult
                 order_result = place_binance_futures_market_order(
                     symbol=symbol,
@@ -4005,7 +3970,7 @@ class WeatherEnsembleBot:
                     atr=atr_val,
                     custom_tp=trade_custom_tp,
                     custom_sl=trade_custom_sl,
-                    is_quick_scalp=trade_is_scalp,
+                    is_quick_scalp=False,
                     channel=trade_channel
                 )
 
