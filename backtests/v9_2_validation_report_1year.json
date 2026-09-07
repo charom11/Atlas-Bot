@@ -1,0 +1,185 @@
+{
+  "candidate": "V9.2",
+  "dataset": "1year",
+  "total_trades": 10449,
+  "parity_checks": {
+    "production_isolated (main.py untouched)": true,
+    "pruned_setups_gated (LIQUIDITY_SWEEP, EXHAUSTION_REVERSAL)": true,
+    "range_and_chop_gated": true,
+    "fib_requires_confirmation": true,
+    "asymmetric_trend_target (2.50x ATR target / 1.25x stop)": true
+  },
+  "portfolio": {
+    "trades": 10449,
+    "wins": 4161,
+    "win_rate": 0.3982199253517083,
+    "profit_factor": 1.034576393481213,
+    "net_r": 220.6713318934356,
+    "expectancy_r": 0.021118894812272523,
+    "max_drawdown_r": 100.66133230263321,
+    "avg_bars_held": 6.7032251890133026
+  },
+  "cost_stress": [
+    {
+      "multiplier": 1.0,
+      "friction_per_trade_r": 0.026,
+      "profit_factor": 1.03,
+      "net_r": 220.6713318934356,
+      "expectancy_r": 0.021118894812272523
+    },
+    {
+      "multiplier": 1.25,
+      "friction_per_trade_r": 0.0325,
+      "profit_factor": 1.02,
+      "net_r": 152.75283189346533,
+      "expectancy_r": 0.014618894812275369
+    },
+    {
+      "multiplier": 1.5,
+      "friction_per_trade_r": 0.039,
+      "profit_factor": 1.01,
+      "net_r": 84.83433189345261,
+      "expectancy_r": 0.008118894812274152
+    },
+    {
+      "multiplier": 2.0,
+      "friction_per_trade_r": 0.052,
+      "profit_factor": 0.99,
+      "net_r": -51.002668106544874,
+      "expectancy_r": -0.004881105187725608
+    }
+  ],
+  "asset_loo": {
+    "BTCUSDT": {
+      "baseline_net_r": 220.6713318934356,
+      "remaining_net_r": 179.37378581902914,
+      "delta_r": -41.297546074406455,
+      "retained_fraction": 0.8128549561918199
+    },
+    "ETHUSDT": {
+      "baseline_net_r": 220.6713318934356,
+      "remaining_net_r": 189.76489733183703,
+      "delta_r": -30.90643456159856,
+      "retained_fraction": 0.8599435898790715
+    },
+    "SOLUSDT": {
+      "baseline_net_r": 220.6713318934356,
+      "remaining_net_r": 156.6482928087059,
+      "delta_r": -64.0230390847297,
+      "retained_fraction": 0.7098715155458115
+    },
+    "XRPUSDT": {
+      "baseline_net_r": 220.6713318934356,
+      "remaining_net_r": 230.3657069334013,
+      "delta_r": 9.694375039965706,
+      "retained_fraction": 1.043931284398316
+    },
+    "DOGEUSDT": {
+      "baseline_net_r": 220.6713318934356,
+      "remaining_net_r": 191.07405764574432,
+      "delta_r": -29.597274247691274,
+      "retained_fraction": 0.8658762151216629
+    },
+    "SUIUSDT": {
+      "baseline_net_r": 220.6713318934356,
+      "remaining_net_r": 156.12991892844238,
+      "delta_r": -64.54141296499321,
+      "retained_fraction": 0.7075224388632371
+    }
+  },
+  "regime_loo": {
+    "STRONG_TREND": {
+      "regime_trades": 229,
+      "regime_net_r": -11.949427040902215,
+      "remaining_net_r": 232.62075893432822,
+      "remaining_pf": 1.0373193928852744
+    },
+    "MILD_TREND": {
+      "regime_trades": 2400,
+      "regime_net_r": 17.810591260404905,
+      "remaining_net_r": 202.8607406330401,
+      "remaining_pf": 1.0416492227160197
+    },
+    "HIGH_VOL": {
+      "regime_trades": 6140,
+      "regime_net_r": 277.1345065104264,
+      "remaining_net_r": -56.46317461699172,
+      "remaining_pf": 0.9793196728208028
+    },
+    "BREAKDOWN": {
+      "regime_trades": 1680,
+      "regime_net_r": -62.32433883649852,
+      "remaining_net_r": 282.995670729919,
+      "remaining_pf": 1.0532728471686532
+    }
+  },
+  "setup_ablation": {
+    "TREND_CONTINUATION": {
+      "setup_trades": 1657,
+      "setup_net_r": 74.0893900147041,
+      "remaining_net_r": 146.5819418787487,
+      "remaining_pf": 1.027563762040353
+    },
+    "PULLBACK_CONTINUATION": {
+      "setup_trades": 1152,
+      "setup_net_r": -17.842995562467,
+      "remaining_net_r": 238.51432745589898,
+      "remaining_pf": 1.0420181295722024
+    },
+    "MSS_SHIFT": {
+      "setup_trades": 7125,
+      "setup_net_r": 128.33108345062107,
+      "remaining_net_r": 92.34024844284198,
+      "remaining_pf": 1.0446289230498718
+    },
+    "BREAKOUT_RETEST": {
+      "setup_trades": 18,
+      "setup_net_r": 2.332000000000054,
+      "remaining_net_r": 218.33933189343617,
+      "remaining_pf": 1.0342660852724042
+    },
+    "VWAP_TREND": {
+      "setup_trades": 101,
+      "setup_net_r": 11.020120050401461,
+      "remaining_net_r": 209.65121184304434,
+      "remaining_pf": 1.0331411174926861
+    },
+    "BB_ATR_EXPANSION": {
+      "setup_trades": 396,
+      "setup_net_r": 22.74173394020356,
+      "remaining_net_r": 197.92959795324415,
+      "remaining_pf": 1.0321870921592742
+    }
+  },
+  "bootstrap": {
+    "mean_expectancy_r": 0.02111889481227472,
+    "ci_95_lower_r": -0.004283508784985591,
+    "ci_95_upper_r": 0.043662030602310255,
+    "samples": 2000
+  },
+  "equity_stats": {
+    "trades": 10449,
+    "net_r": 220.67133189345853,
+    "max_drawdown_r": 100.66133230263321,
+    "max_consecutive_losses": 25
+  },
+  "capacity": {
+    "mean_trades_per_day": 25.610294117647058,
+    "buckets": {
+      "10.0": 0.9509803921568627,
+      "25.0": 0.49754901960784315,
+      "50.0": 0.00980392156862745,
+      "75.0": 0.0,
+      "100.0": 0.0
+    }
+  },
+  "oos_gate": {
+    "pass": true,
+    "checks": {
+      "oos_pf": true,
+      "oos_net_r": true,
+      "drawdown": true
+    }
+  },
+  "elapsed_seconds": 40.377618074417114
+}

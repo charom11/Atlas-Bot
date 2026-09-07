@@ -1,0 +1,430 @@
+{
+  "candidate": "V9.3",
+  "dataset": "4year",
+  "config": {
+    "allow_tier_2": true,
+    "allow_tier_3": false,
+    "allow_vwap_trend": true,
+    "allow_mild_trend": true,
+    "min_score": 5,
+    "min_confirmations": 1,
+    "trend_stop_atr": 1.25,
+    "trend_target_atr": 2.5,
+    "base_stop_atr": 1.25,
+    "base_target_atr": 2.0,
+    "shadow_mode": true,
+    "max_operating_leverage": 5.0,
+    "max_risk_per_trade_pct": 0.0035,
+    "max_portfolio_risk_pct": 0.015
+  },
+  "audit_summary": {
+    "candidate": "V9.3",
+    "role": "Opportunity Admission & Shadow-Mode Layer",
+    "live_orders_permitted": false,
+    "main_py_authoritative": true,
+    "active_setups": [
+      "BB_ATR_EXPANSION",
+      "BREAKOUT_RETEST",
+      "MSS_SHIFT",
+      "TREND_CONTINUATION",
+      "VWAP_TREND"
+    ],
+    "disabled_setups": [
+      "EXHAUSTION_REVERSAL",
+      "FIB_OTE",
+      "LIQUIDITY_SWEEP",
+      "PULLBACK_CONTINUATION",
+      "VWAP_REVERSION"
+    ],
+    "allowed_regimes": [
+      "HIGH_VOL",
+      "MILD_TREND",
+      "STRONG_TREND"
+    ],
+    "gated_regimes": [
+      "BREAKDOWN",
+      "CHOP",
+      "RANGE"
+    ],
+    "breakdown_gated": true,
+    "pullback_gated": true,
+    "max_operating_leverage": 5.0,
+    "leverage_75x_rejected": true,
+    "tier_1_assets": [
+      "SUIUSDT",
+      "SOLUSDT",
+      "XRPUSDT"
+    ],
+    "tier_2_assets": [
+      "BTCUSDT",
+      "DOGEUSDT",
+      "ETHUSDT"
+    ],
+    "tier_3_assets": [
+      "LINKUSDT",
+      "ADAUSDT",
+      "NEARUSDT",
+      "AVAXUSDT",
+      "BNBUSDT"
+    ]
+  },
+  "portfolio": {
+    "trades": 29559,
+    "wins": 11712,
+    "win_rate": 0.3962245001522379,
+    "profit_factor": 1.0276628935725818,
+    "net_r": 502.0804506467881,
+    "expectancy_r": 0.016985704883344773,
+    "max_drawdown_r": 100.88379478634897,
+    "avg_bars_held": 6.313880713149971
+  },
+  "by_asset": {
+    "LINKUSDT": {
+      "trades": 0,
+      "wins": 0,
+      "win_rate": 0.0,
+      "profit_factor": 0.0,
+      "net_r": 0.0,
+      "expectancy_r": 0.0,
+      "max_drawdown_r": 0.0,
+      "avg_bars_held": 0.0
+    },
+    "ADAUSDT": {
+      "trades": 0,
+      "wins": 0,
+      "win_rate": 0.0,
+      "profit_factor": 0.0,
+      "net_r": 0.0,
+      "expectancy_r": 0.0,
+      "max_drawdown_r": 0.0,
+      "avg_bars_held": 0.0
+    },
+    "AVAXUSDT": {
+      "trades": 0,
+      "wins": 0,
+      "win_rate": 0.0,
+      "profit_factor": 0.0,
+      "net_r": 0.0,
+      "expectancy_r": 0.0,
+      "max_drawdown_r": 0.0,
+      "avg_bars_held": 0.0
+    },
+    "NEARUSDT": {
+      "trades": 0,
+      "wins": 0,
+      "win_rate": 0.0,
+      "profit_factor": 0.0,
+      "net_r": 0.0,
+      "expectancy_r": 0.0,
+      "max_drawdown_r": 0.0,
+      "avg_bars_held": 0.0
+    },
+    "BNBUSDT": {
+      "trades": 0,
+      "wins": 0,
+      "win_rate": 0.0,
+      "profit_factor": 0.0,
+      "net_r": 0.0,
+      "expectancy_r": 0.0,
+      "max_drawdown_r": 0.0,
+      "avg_bars_held": 0.0
+    },
+    "SUIUSDT": {
+      "trades": 4017,
+      "wins": 1580,
+      "win_rate": 0.39332835449340303,
+      "profit_factor": 1.015612859314534,
+      "net_r": 38.72466333912536,
+      "expectancy_r": 0.009640195006005815,
+      "max_drawdown_r": 88.60773186646811,
+      "avg_bars_held": 6.612895195419467
+    },
+    "ETHUSDT": {
+      "trades": 5373,
+      "wins": 2117,
+      "win_rate": 0.3940070723990322,
+      "profit_factor": 1.020291827903388,
+      "net_r": 67.0705062137706,
+      "expectancy_r": 0.012482878506192183,
+      "max_drawdown_r": 92.81102067801416,
+      "avg_bars_held": 6.212544202493952
+    },
+    "SOLUSDT": {
+      "trades": 5087,
+      "wins": 2039,
+      "win_rate": 0.40082563396894044,
+      "profit_factor": 1.0508775767739977,
+      "net_r": 157.80941306593644,
+      "expectancy_r": 0.031022098106140445,
+      "max_drawdown_r": 43.502546984561974,
+      "avg_bars_held": 6.527619422056222
+    },
+    "BTCUSDT": {
+      "trades": 5370,
+      "wins": 2155,
+      "win_rate": 0.40130353817504655,
+      "profit_factor": 1.0396068997195105,
+      "net_r": 129.12493915565435,
+      "expectancy_r": 0.024045612505708445,
+      "max_drawdown_r": 75.72802714532432,
+      "avg_bars_held": 6.141340782122905
+    },
+    "XRPUSDT": {
+      "trades": 4798,
+      "wins": 1878,
+      "win_rate": 0.3914130887869946,
+      "profit_factor": 1.0087906436091274,
+      "net_r": 26.142502794810785,
+      "expectancy_r": 0.005448625009339471,
+      "max_drawdown_r": 75.60486896845892,
+      "avg_bars_held": 6.319091288036682
+    },
+    "DOGEUSDT": {
+      "trades": 4914,
+      "wins": 1943,
+      "win_rate": 0.3954008954008954,
+      "profit_factor": 1.0274746941260227,
+      "net_r": 83.2084260775533,
+      "expectancy_r": 0.016932931639713735,
+      "max_drawdown_r": 100.8837947863427,
+      "avg_bars_held": 6.1424501424501425
+    }
+  },
+  "by_setup": {
+    "TREND_CONTINUATION": {
+      "trades": 4837,
+      "wins": 1751,
+      "win_rate": 0.3620012404382882,
+      "profit_factor": 1.0464533046825877,
+      "net_r": 145.11495539640168,
+      "expectancy_r": 0.030001024477238306,
+      "max_drawdown_r": 53.30457068127638,
+      "avg_bars_held": 9.21811039900765
+    },
+    "PULLBACK_CONTINUATION": {
+      "trades": 0,
+      "wins": 0,
+      "win_rate": 0.0,
+      "profit_factor": 0.0,
+      "net_r": 0.0,
+      "expectancy_r": 0.0,
+      "max_drawdown_r": 0.0,
+      "avg_bars_held": 0.0
+    },
+    "FIB_OTE": {
+      "trades": 0,
+      "wins": 0,
+      "win_rate": 0.0,
+      "profit_factor": 0.0,
+      "net_r": 0.0,
+      "expectancy_r": 0.0,
+      "max_drawdown_r": 0.0,
+      "avg_bars_held": 0.0
+    },
+    "MSS_SHIFT": {
+      "trades": 22779,
+      "wins": 9162,
+      "win_rate": 0.40221256420387197,
+      "profit_factor": 1.0213702105502802,
+      "net_r": 296.3668581694073,
+      "expectancy_r": 0.013010529793643588,
+      "max_drawdown_r": 102.60964039101526,
+      "avg_bars_held": 5.666183765749155
+    },
+    "LIQUIDITY_SWEEP": {
+      "trades": 0,
+      "wins": 0,
+      "win_rate": 0.0,
+      "profit_factor": 0.0,
+      "net_r": 0.0,
+      "expectancy_r": 0.0,
+      "max_drawdown_r": 0.0,
+      "avg_bars_held": 0.0
+    },
+    "BREAKOUT_RETEST": {
+      "trades": 19,
+      "wins": 9,
+      "win_rate": 0.47368421052631576,
+      "profit_factor": 1.3807017543859714,
+      "net_r": 3.9060000000000645,
+      "expectancy_r": 0.20557894736842444,
+      "max_drawdown_r": 3.0779999999999994,
+      "avg_bars_held": 5.052631578947368
+    },
+    "VWAP_TREND": {
+      "trades": 307,
+      "wins": 125,
+      "win_rate": 0.40716612377850164,
+      "profit_factor": 0.9882905936327032,
+      "net_r": -2.1693826166087224,
+      "expectancy_r": -0.007066392887976294,
+      "max_drawdown_r": 26.704750107339542,
+      "avg_bars_held": 10.208469055374593
+    },
+    "VWAP_REVERSION": {
+      "trades": 0,
+      "wins": 0,
+      "win_rate": 0.0,
+      "profit_factor": 0.0,
+      "net_r": 0.0,
+      "expectancy_r": 0.0,
+      "max_drawdown_r": 0.0,
+      "avg_bars_held": 0.0
+    },
+    "BB_ATR_EXPANSION": {
+      "trades": 1617,
+      "wins": 665,
+      "win_rate": 0.41125541125541126,
+      "profit_factor": 1.0611667395694475,
+      "net_r": 58.86201969758393,
+      "expectancy_r": 0.036401991154968415,
+      "max_drawdown_r": 35.79908215090451,
+      "avg_bars_held": 6.025974025974026
+    },
+    "EXHAUSTION_REVERSAL": {
+      "trades": 0,
+      "wins": 0,
+      "win_rate": 0.0,
+      "profit_factor": 0.0,
+      "net_r": 0.0,
+      "expectancy_r": 0.0,
+      "max_drawdown_r": 0.0,
+      "avg_bars_held": 0.0
+    }
+  },
+  "by_regime": {
+    "STRONG_TREND": {
+      "trades": 540,
+      "wins": 224,
+      "win_rate": 0.4148148148148148,
+      "profit_factor": 1.1691833841594765,
+      "net_r": 54.253345395732936,
+      "expectancy_r": 0.10046915814024618,
+      "max_drawdown_r": 30.362317628063607,
+      "avg_bars_held": 8.522222222222222
+    },
+    "MILD_TREND": {
+      "trades": 7112,
+      "wins": 2626,
+      "win_rate": 0.36923509561304835,
+      "profit_factor": 1.006413004192045,
+      "net_r": 29.188323230045928,
+      "expectancy_r": 0.004104094942357414,
+      "max_drawdown_r": 117.00489978167165,
+      "avg_bars_held": 8.35587739032621
+    },
+    "RANGE": {
+      "trades": 0,
+      "wins": 0,
+      "win_rate": 0.0,
+      "profit_factor": 0.0,
+      "net_r": 0.0,
+      "expectancy_r": 0.0,
+      "max_drawdown_r": 0.0,
+      "avg_bars_held": 0.0
+    },
+    "HIGH_VOL": {
+      "trades": 21907,
+      "wins": 8862,
+      "win_rate": 0.40452823298489066,
+      "profit_factor": 1.0315290943729651,
+      "net_r": 418.63878202101057,
+      "expectancy_r": 0.019109817958689487,
+      "max_drawdown_r": 134.1489638390396,
+      "avg_bars_held": 5.596521659743461
+    },
+    "BREAKDOWN": {
+      "trades": 0,
+      "wins": 0,
+      "win_rate": 0.0,
+      "profit_factor": 0.0,
+      "net_r": 0.0,
+      "expectancy_r": 0.0,
+      "max_drawdown_r": 0.0,
+      "avg_bars_held": 0.0
+    },
+    "CHOP": {
+      "trades": 0,
+      "wins": 0,
+      "win_rate": 0.0,
+      "profit_factor": 0.0,
+      "net_r": 0.0,
+      "expectancy_r": 0.0,
+      "max_drawdown_r": 0.0,
+      "avg_bars_held": 0.0
+    }
+  },
+  "walk_forward": {
+    "TRAIN (2022-2023)": {
+      "trades": 9060,
+      "wins": 3515,
+      "win_rate": 0.3879690949227373,
+      "profit_factor": 0.9890738911129874,
+      "net_r": -61.50443735652278,
+      "expectancy_r": -0.006788569244649313,
+      "max_drawdown_r": 141.65181122630747,
+      "avg_bars_held": 6.4072847682119205
+    },
+    "VALIDATE (2024)": {
+      "trades": 7864,
+      "wins": 3112,
+      "win_rate": 0.3957273652085453,
+      "profit_factor": 1.0281937939369152,
+      "net_r": 136.48380746618682,
+      "expectancy_r": 0.017355519769352342,
+      "max_drawdown_r": 86.61145436929885,
+      "avg_bars_held": 6.142293997965412
+    },
+    "OOS #1 (2025)": {
+      "trades": 7484,
+      "wins": 3013,
+      "win_rate": 0.402592196686264,
+      "profit_factor": 1.0576518698967605,
+      "net_r": 262.3194410148641,
+      "expectancy_r": 0.03505070029594656,
+      "max_drawdown_r": 80.48539855890203,
+      "avg_bars_held": 6.390566541956173
+    },
+    "OOS #2 (2026)": {
+      "trades": 5151,
+      "wins": 2072,
+      "win_rate": 0.4022519899048728,
+      "profit_factor": 1.0526482503851866,
+      "net_r": 164.78163952229826,
+      "expectancy_r": 0.03199022316488027,
+      "max_drawdown_r": 47.71317762572676,
+      "avg_bars_held": 6.300135895942535
+    }
+  },
+  "cost_stress": {
+    "Low Friction (0.015 R)": {
+      "friction_r": 0.015,
+      "trades": 29559,
+      "profit_factor": 1.05,
+      "net_r": 827.2294506471301,
+      "expectancy_r": 0.02798570488335634
+    },
+    "Base VIP0 (0.026 R)": {
+      "friction_r": 0.026,
+      "trades": 29559,
+      "profit_factor": 1.03,
+      "net_r": 502.0804506467881,
+      "expectancy_r": 0.016985704883344773
+    },
+    "Stressed (+50%: 0.040 R)": {
+      "friction_r": 0.04,
+      "trades": 29559,
+      "profit_factor": 1.0,
+      "net_r": 88.25445064682492,
+      "expectancy_r": 0.002985704883346017
+    },
+    "Severe (+130%: 0.060 R)": {
+      "friction_r": 0.06,
+      "trades": 29559,
+      "profit_factor": 0.97,
+      "net_r": -502.92554935311523,
+      "expectancy_r": -0.017014295116651958
+    }
+  },
+  "elapsed_seconds": 66.239093542099
+}
