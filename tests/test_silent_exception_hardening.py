@@ -39,6 +39,16 @@ def test_check_order_flow_absorption_fails_closed_on_error(monkeypatch):
     assert ok is False
     assert "Fail Closed" in desc
 
+    # 4. Realistic Binance trades with string prices and quantities (no TypeError)
+    realistic_trades = [
+        {"q": "0.15", "p": f"{4420.0 + (i % 5) * 0.1:.2f}", "m": (i % 2 == 0)}
+        for i in range(40)
+    ]
+    monkeypatch.setattr(requests, "get", lambda *a, **kw: FakeResponse(200, realistic_trades))
+    ok, desc, delta, abs_type = main.check_order_flow_absorption("PAXGUSDT", "BUY")
+    assert "ORDER FLOW ERROR" not in desc
+    assert isinstance(delta, float)
+
 
 def test_sync_binance_realized_pnl_logs_warning_on_failure(monkeypatch, capsys):
     """

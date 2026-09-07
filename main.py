@@ -2328,8 +2328,8 @@ def check_order_flow_absorption(symbol, target_side, trades_limit=500):
         curr_p = prices[-1]
 
         # Absorption Checks
-        top_buys = sum(float(t['q']) for t in raw if t['p'] >= max_p * 0.9995 and not t['m'])
-        bot_sells = sum(float(t['q']) for t in raw if t['p'] <= min_p * 1.0005 and t['m'])
+        top_buys = sum(float(t['q']) for t in raw if float(t['p']) >= max_p * 0.9995 and not t['m'])
+        bot_sells = sum(float(t['q']) for t in raw if float(t['p']) <= min_p * 1.0005 and t['m'])
         avg_cluster = total_vol / 10.0
 
         absorption = "NONE"
