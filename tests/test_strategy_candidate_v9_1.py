@@ -1,13 +1,4 @@
-from strategy_candidate_v9_1 import (
-    V91Config,
-    PRUNED_SETUPS,
-    allowed_setups,
-    asset_allowed,
-    audit_summary,
-    confirmation_ok,
-    target_stop_atr,
-    LONG,
-)
+from strategy_candidate_v9_1 import V91Config, PRUNED_SETUPS, allowed_setups, asset_allowed, audit_summary, confirmation_ok, target_stop_atr, LONG
 
 
 def test_pruned_setups_are_never_allowed():
