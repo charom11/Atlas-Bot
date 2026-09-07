@@ -791,10 +791,11 @@ def simulate_v8_portfolio(
 
                 balance += pos["margin"] + net_pnl
                 r_mult = net_pnl / (pos["risk_amount"] or 1e-4)
+                f_mult = (pos.get("fee_in", 0.0) + fee) / (pos["risk_amount"] or 1e-4)
                 closed_trades.append({
                     "symbol": sym,
                     "side": pos["side"],
-                    "timestamp": ts,
+                    "timestamp": str(ts),
                     "entry_price": pos["entry_price"],
                     "exit_price": exit_price,
                     "notional": pos["notional"],
@@ -802,8 +803,11 @@ def simulate_v8_portfolio(
                     "leverage": pos["leverage"],
                     "net_pnl": net_pnl,
                     "r_multiple": r_mult,
+                    "friction_r": f_mult,
                     "reason": exit_reason,
                     "channel": pos["channel"],
+                    "channels": pos.get("channels", (pos["channel"],)),
+                    "regime": pos.get("regime", "NEUTRAL"),
                     "win": net_pnl > 0,
                 })
                 to_close.append(sym)
@@ -954,7 +958,7 @@ def simulate_v8_portfolio(
                     score=0.75,
                     channel_score=0.80,
                     asset_score=0.70,
-                    market_regime="NEUTRAL",
+                    market_regime=classify_market_regime(breadth, btc_trend, volatility),
                     expected_net_r=0.35,
                     risk_pct=DEFAULT_RISK_PCT,
                     leverage=10.0,
@@ -962,12 +966,13 @@ def simulate_v8_portfolio(
                 )
 
             if decision.action != FLAT:
-                candidates.append((sym, decision, cand_stop, c, lead_channel, ch["atr_pct"][r_i] * c))
+                active_chans = tuple(e.channel for e in evidence if e.side == decision.action)
+                candidates.append((sym, decision, cand_stop, c, lead_channel, ch["atr_pct"][r_i] * c, active_chans))
 
         # Sort candidates by combined opportunity score
         candidates.sort(key=lambda x: abs(x[1].score), reverse=True)
 
-        for sym, dec, stop_p, entry_p, lead_ch, asset_atr in candidates:
+        for sym, dec, stop_p, entry_p, lead_ch, asset_atr, active_chans in candidates:
             if len(active_positions) >= max_positions or current_open_risk >= max_portfolio_risk:
                 break
 
@@ -1006,6 +1011,9 @@ def simulate_v8_portfolio(
                 "peak_price": entry_p,
                 "bars_held": 0,
                 "channel": lead_ch,
+                "channels": active_chans,
+                "regime": dec.market_regime,
+                "fee_in": fee_in,
             }
 
             current_open_risk += eff_risk
