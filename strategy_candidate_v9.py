@@ -268,6 +268,8 @@ def allowed_setups(regime: str) -> set[str]:
 
 def opportunity_score(row: pd.Series, votes: dict[str, int], setup: str) -> tuple[int, int]:
     """Score a setup and return (score, confirmation_count)."""
+    if _num(getattr(row, "atr", 0.0)) <= 0:
+        return 0, 0
     side = votes.get(setup, FLAT)
     if side == FLAT or setup not in allowed_setups(str(row.regime)):
         return 0, 0
@@ -323,8 +325,16 @@ def backtest_frame(df: pd.DataFrame, min_score: int = 5, min_confirmations: int 
         data["symbol"] = "UNKNOWN"
     data["regime"] = data.apply(classify_regime, axis=1)
     trades: list[Trade] = []
+    n = len(data)
+    opens = data["open"].values
+    highs = data["high"].values
+    lows = data["low"].values
+    closes = data["close"].values
+    timestamps = [str(t) for t in data.index]
+    symbol_str = str(data["symbol"].iloc[0]) if "symbol" in data.columns else "UNKNOWN"
+
     i = 201
-    while i < len(data)-1:
+    while i < n - 1:
         row, prev = data.iloc[i], data.iloc[i-1]
         votes = setup_votes(row, prev)
         candidates = []
@@ -333,28 +343,34 @@ def backtest_frame(df: pd.DataFrame, min_score: int = 5, min_confirmations: int 
             if score >= min_score and confirmations >= min_confirmations:
                 candidates.append((score, confirmations, setup, votes[setup]))
         if not candidates:
-            i += 1; continue
+            i += 1
+            continue
         score, confirmations, setup, side = max(candidates, key=lambda x: (x[0], x[1]))
         atr = _num(row.atr)
         if atr <= 0:
-            i += 1; continue
+            i += 1
+            continue
         entry_idx = i + 1
-        entry = _num(data.iloc[entry_idx].open)
-        stop = entry - side*1.25*atr
-        target = entry + side*2.0*atr
+        entry = opens[entry_idx]
+        stop = entry - side * 1.25 * atr
+        target = entry + side * 2.0 * atr
         exit_px, held = entry, 0
-        for j in range(entry_idx, min(len(data), entry_idx+max_hold_bars)):
-            bar = data.iloc[j]; held += 1
-            stop_hit = (_num(bar.low) <= stop) if side == LONG else (_num(bar.high) >= stop)
-            target_hit = (_num(bar.high) >= target) if side == LONG else (_num(bar.low) <= target)
+        end_bar = min(n, entry_idx + max_hold_bars)
+        for j in range(entry_idx, end_bar):
+            held += 1
+            l_val, h_val = lows[j], highs[j]
+            stop_hit = (l_val <= stop) if side == LONG else (h_val >= stop)
+            target_hit = (h_val >= target) if side == LONG else (l_val <= target)
             if stop_hit:
-                exit_px = stop; break
+                exit_px = stop
+                break
             if target_hit:
-                exit_px = target; break
-            exit_px = _num(bar.close)
-        gross_r = side*(exit_px-entry)/max(abs(entry-stop), 1e-12)
-        net_r = gross_r-friction_r
-        trades.append(Trade(str(data.index[entry_idx]), str(row.symbol), side, setup, str(row.regime), entry, exit_px, net_r, friction_r, held))
+                exit_px = target
+                break
+            exit_px = closes[j]
+        gross_r = side * (exit_px - entry) / max(abs(entry - stop), 1e-12)
+        net_r = gross_r - friction_r
+        trades.append(Trade(timestamps[entry_idx], symbol_str, side, setup, str(row.regime), entry, exit_px, net_r, friction_r, held))
         i = entry_idx + max(1, held)
     return trades
 
@@ -388,9 +404,9 @@ def walk_forward(df: pd.DataFrame, periods: Sequence[tuple[str, str, str]], **kw
 
 def load_ohlcv_csv(path: str | Path) -> pd.DataFrame:
     df = pd.read_csv(path)
-    time_col = next((c for c in ("timestamp", "datetime", "time", "date") if c in df.columns), None)
+    time_col = next((c for c in ("open_time", "timestamp", "datetime", "time", "date") if c in df.columns), None)
     if time_col is None:
-        raise ValueError("CSV requires timestamp, datetime, time, or date column")
+        raise ValueError("CSV requires open_time, timestamp, datetime, time, or date column")
     df[time_col] = pd.to_datetime(df[time_col], utc=True)
     df = df.set_index(time_col)
     rename = {c: c.lower() for c in df.columns}
