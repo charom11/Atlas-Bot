@@ -1,13 +1,12 @@
-"""Small offline V9.1 policy audit helper.
+"""Offline V9.1 policy audit helper.
 
-This intentionally does not claim portfolio performance. It verifies that an
-existing V9 event stream obeys V9.1 admission rules before a full institutional
-backtest is run locally.
+This helper verifies the explicit V9.1 research policy. It does not claim
+portfolio performance; performance must come from the full 15m institutional
+runner against the historical dataset.
 """
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 from pathlib import Path
 
