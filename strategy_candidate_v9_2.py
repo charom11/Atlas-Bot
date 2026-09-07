@@ -9,6 +9,30 @@ from dataclasses import dataclass
 from statistics import mean
 from typing import Iterable, Mapping, Sequence
 
+from strategy_candidate_v9 import (
+    LONG,
+    SHORT,
+    FLAT,
+    SETUPS,
+    REGIMES,
+    Trade,
+    BacktestStats,
+    load_ohlcv_csv,
+    summarize,
+    report,
+)
+from strategy_candidate_v9_1 import (
+    V91Config,
+    PRUNED_SETUPS,
+    TIER_1,
+    TIER_2,
+    TIER_3,
+    asset_allowed,
+    allowed_setups,
+    backtest_frame,
+    walk_forward,
+)
+
 @dataclass(frozen=True)
 class StressResult:
     multiplier: float
@@ -93,3 +117,36 @@ def research_summary() -> dict[str, object]:
             "validation_focus": ["cost_stress", "asset_leave_one_out", "regime_leave_one_out",
                                   "setup_ablation", "bootstrap_expectancy", "loss_streaks", "capacity"],
             "recommended_oos_pf_floor": 1.00}
+
+
+def run_v9_2_audit(
+    dataset: str = "4year",
+    friction_r: float = 0.026,
+    bootstrap_samples: int = 2000,
+    output: str = "backtests/v9_2_validation_report.json",
+) -> dict:
+    from backtests.run_v9_2_validation_hardening import run_v9_2_validation_hardening
+    return run_v9_2_validation_hardening(
+        dataset_type=dataset,
+        friction_r=friction_r,
+        bootstrap_samples=bootstrap_samples,
+        output_path=output,
+    )
+
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Strategy Candidate V9.2 Validation-Hardening Backtester")
+    parser.add_argument("--dataset", default="4year", choices=["1year", "4year"], help="Dataset range (default: 4year)")
+    parser.add_argument("--friction-r", type=float, default=0.026, help="Base friction in R (default: 0.026)")
+    parser.add_argument("--bootstrap-samples", type=int, default=2000, help="Bootstrap resamples (default: 2000)")
+    parser.add_argument("--output", default="backtests/v9_2_validation_report.json", help="Output JSON path")
+    args = parser.parse_args()
+
+    run_v9_2_audit(
+        dataset=args.dataset,
+        friction_r=args.friction_r,
+        bootstrap_samples=args.bootstrap_samples,
+        output=args.output,
+    )
+
