@@ -110,3 +110,88 @@ def test_cost_filter_can_turn_trade_flat():
     decision = decide(evidence, asset, breadth=0.7, btc_trend=0.6, volatility=0.02,
                       entry=100, stop=99, expected_move_pct=0.001, equity=1000)
     assert decision.action == FLAT
+
+
+def test_resample_to_1h():
+    from strategy_candidate_v8 import resample_to_1h
+    times = pd.date_range("2024-01-01 00:00:00", periods=8, freq="15min")
+    df = pd.DataFrame({
+        "open_time": times,
+        "open": [10.0, 10.5, 11.0, 10.8, 11.2, 11.5, 11.0, 10.9],
+        "high": [10.8, 11.2, 11.5, 11.0, 11.6, 11.8, 11.3, 11.1],
+        "low": [9.9, 10.3, 10.8, 10.6, 11.0, 11.1, 10.8, 10.5],
+        "close": [10.5, 11.0, 10.8, 11.2, 11.5, 11.2, 10.9, 11.0],
+        "volume": [100.0] * 8,
+    })
+    h1 = resample_to_1h(df)
+    assert len(h1) == 2
+    assert h1["open"].iloc[0] == 10.0
+    assert h1["high"].iloc[0] == 11.5
+    assert h1["low"].iloc[0] == 9.9
+    assert h1["close"].iloc[0] == 11.2
+    assert h1["volume"].iloc[0] == 400.0
+
+
+def test_precompute_v8_channel_signals():
+    from strategy_candidate_v8 import precompute_v8_channel_signals
+    times = pd.date_range("2024-01-01", periods=100, freq="1h")
+    trend = np.linspace(100, 150, 100) + np.sin(np.linspace(0, 10, 100)) * 5
+    df = pd.DataFrame({
+        "open_time": times,
+        "open": trend - 0.5,
+        "high": trend + 1.0,
+        "low": trend - 1.0,
+        "close": trend,
+        "volume": np.full(100, 1000.0),
+    })
+    ch = precompute_v8_channel_signals(df)
+    for key in ("fib_side", "mss_side", "ma_side", "sr_side", "div_side", "atr_pct", "close"):
+        assert key in ch
+        assert len(ch[key]) == 100
+
+
+def test_simulate_v8_portfolio_synthetic():
+    from strategy_candidate_v8 import (
+        precompute_v8_channel_signals, simulate_v8_portfolio, AssetMetrics
+    )
+    times = pd.date_range("2024-01-01", periods=80, freq="1h")
+    trend1 = np.linspace(100, 130, 80)
+    trend2 = np.linspace(50, 65, 80)
+    df1 = pd.DataFrame({"open_time": times, "open": trend1-0.2, "high": trend1+0.5, "low": trend1-0.5, "close": trend1, "volume": 1000.0})
+    df2 = pd.DataFrame({"open_time": times, "open": trend2-0.2, "high": trend2+0.5, "low": trend2-0.5, "close": trend2, "volume": 1000.0})
+    data_map = {"SOL": df1, "AVAX": df2}
+    channel_map = {"SOL": precompute_v8_channel_signals(df1), "AVAX": precompute_v8_channel_signals(df2)}
+    timeline = list(times)
+    metrics_map = {
+        "SOL": AssetMetrics("SOL", 0.08, 1.25, 50, 0.08, stability_score=0.8),
+        "AVAX": AssetMetrics("AVAX", 0.06, 1.15, 45, 0.10, stability_score=0.75),
+    }
+
+    res = simulate_v8_portfolio(
+        data_map=data_map,
+        channel_map=channel_map,
+        timeline=timeline,
+        target_symbols=["SOL", "AVAX"],
+        asset_metrics_map=metrics_map,
+        initial_balance=1000.0,
+        mode="V8",
+    )
+    assert "balance" in res
+    assert "max_drawdown" in res
+    assert "closed_trades" in res
+    assert res["balance"] > 0
+
+
+def test_compile_partition_stats():
+    from strategy_candidate_v8 import compile_partition_stats
+    trades = [
+        {"win": True, "net_pnl": 15.0, "r_multiple": 1.5},
+        {"win": False, "net_pnl": -10.0, "r_multiple": -1.0},
+        {"win": True, "net_pnl": 20.0, "r_multiple": 2.0},
+    ]
+    st = compile_partition_stats(trades, "TEST")
+    assert st["trades"] == 3
+    assert abs(st["win_rate"] - 66.666) < 0.1
+    assert st["pnl"] == 25.0
+    assert st["pf"] == 3.5
+
