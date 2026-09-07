@@ -1,5 +1,3 @@
-from types import SimpleNamespace
-
 from strategy_candidate_v9_1 import (
     V91Config,
     PRUNED_SETUPS,
@@ -23,9 +21,8 @@ def test_range_and_chop_are_hard_gated():
 
 
 def test_fib_requires_structural_confirmation():
-    row = SimpleNamespace()
-    assert not confirmation_ok(row, "FIB_OTE", {"FIB_OTE": LONG, "MSS_SHIFT": 0, "TREND_CONTINUATION": 0})
-    assert confirmation_ok(row, "FIB_OTE", {"FIB_OTE": LONG, "MSS_SHIFT": LONG})
+    assert not confirmation_ok("FIB_OTE", {"FIB_OTE": LONG, "MSS_SHIFT": 0, "TREND_CONTINUATION": 0})
+    assert confirmation_ok("FIB_OTE", {"FIB_OTE": LONG, "MSS_SHIFT": LONG})
 
 
 def test_asset_tiering_defaults_to_tier1_and_tier2():
