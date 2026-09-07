@@ -4,7 +4,7 @@ import pandas as pd
 from strategy_candidate_v2 import (
     EXIT_THRESHOLD, FLAT, LONG, SHORT,
     choose_leverage, enforce_portfolio_limits, generate_strategy_signal,
-    rank_assets, risk_based_notional,
+    rank_assets, risk_based_notional, backtest_frame,
 )
 
 
@@ -75,3 +75,21 @@ def test_portfolio_limits_direction_and_correlation():
     assert len(out)==4
     assert sum(x["signal"]==LONG for x in out)<=3
     assert sum(x["correlation_group"]=="btc" for x in out)<=2
+
+
+def test_backtest_frame_execution_signal_shifted():
+    df = make_ohlcv(n=250)
+    res = backtest_frame(df, fast=True)
+    assert "execution_signal" in res.columns
+    assert res["execution_signal"].iloc[0] == FLAT
+    assert (res["execution_signal"].iloc[1:].values == res["signal"].iloc[:-1].values).all()
+
+
+def test_backtest_frame_vectorized_equivalence():
+    df = make_ohlcv(n=235)
+    fast_res = backtest_frame(df, fast=True)
+    slow_res = backtest_frame(df, fast=False)
+    assert (fast_res["signal"].values == slow_res["signal"].values).all()
+    assert (fast_res["regime"].values == slow_res["regime"].values).all()
+    assert np.allclose(fast_res["score"].values, slow_res["score"].values, atol=1e-5)
+
