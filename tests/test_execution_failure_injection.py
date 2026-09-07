@@ -158,6 +158,12 @@ def test_multiple_protective_stops_collapsed_in_place_binance_futures_tp_sl(monk
             cancelled_algos.append(algo_id)
         return True
 
+    # This test exercises Binance order reconciliation only; CCXT time synchronization
+    # is unrelated and must not make a real network request from CI.
+    class FakeExchange:
+        pass
+
+    monkeypatch.setattr(main, "get_ccxt_exchange", lambda: FakeExchange())
     monkeypatch.setattr(main, "binance_futures_signed_request", fake_signed_request)
     monkeypatch.setattr(main, "cancel_existing_protective_stops", lambda sym, position_side: True)
     monkeypatch.setattr(main, "place_protective_stop", lambda **kw: (True, 8002, 8002, "50500.0"))
