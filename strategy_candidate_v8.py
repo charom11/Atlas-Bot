@@ -102,7 +102,7 @@ def channel_meta_score(evidence: Sequence[ChannelEvidence], reliability: Optiona
         signed = strength * quality * weight * (1.0 if e.side == LONG else -1.0)
         votes.append((signed, weight))
     if not votes:
-        return 0.0, "NO_CHANNEL_EVIDENCE"
+        return 0.0, FLAT
     denom = sum(w for _, w in votes)
     score = sum(v for v, _ in votes) / denom if denom > 0 else 0.0
     side = LONG if score > 0 else SHORT if score < 0 else FLAT
