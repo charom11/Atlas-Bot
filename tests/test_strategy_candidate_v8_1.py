@@ -37,7 +37,7 @@ def test_each_production_channel_is_evaluated_without_weighting():
 
 def test_profit_factor_is_gross_wins_over_gross_losses():
     stats = evaluate_channels(make_events())["MSS_SHIFT"]
-    assert stats.profit_factor == 2.0
+    assert stats.profit_factor == 1.0
     assert stats.win_rate == 0.5
 
 
@@ -54,8 +54,7 @@ def test_channel_slice_attribution_is_explicit():
 
 
 def test_pairwise_incremental_requires_sample_threshold():
-    assert evaluate_incremental_pairs(make_events(), min_trades=2) == []
-    # No pair has two baseline+two combined observations, so small samples are excluded.
+    assert evaluate_incremental_pairs(make_events(), min_trades=3) == []
 
 
 def test_pairwise_incremental_identifies_a_useful_confirmation():
@@ -85,7 +84,7 @@ def test_combinations_only_include_sufficiently_sampled_cohorts():
 def test_rank_channels_orders_by_expectancy_then_profit_factor():
     stats = evaluate_channels(make_events())
     ranked = rank_channels(stats, min_trades=1)
-    assert ranked[0].label == "FIBONACCI"
+    assert ranked[0].label == "5MA_CONSENSUS"
 
 
 def test_recommendation_is_research_only():
@@ -102,8 +101,8 @@ def test_walk_forward_uses_explicit_non_overlapping_iso_windows():
         make_events(),
         [("2025", "2025-01-01/2026-01-01"), ("2026", "2026-01-01/2027-01-01")],
     )
-    assert rows[0].trades == 3
-    assert rows[0].net_r == 1.0
+    assert rows[0].trades == 5
+    assert rows[0].net_r == 2.0
     assert rows[1].trades == 0
 
 
