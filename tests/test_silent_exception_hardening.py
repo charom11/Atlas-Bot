@@ -92,6 +92,13 @@ def test_emergency_tp_cleanup_failure_logged(monkeypatch, capsys):
     monkeypatch.setattr(main, "send_telegram_msg", lambda *a, **kw: None)
     monkeypatch.setattr(main, "get_symbol_info", lambda sym: (2, 3, 5.0))
 
+    # This test exercises the TP/SL failure path only; CCXT time synchronization
+    # is unrelated and must not make a real network request from CI.
+    class FakeExchange:
+        pass
+
+    monkeypatch.setattr(main, "get_ccxt_exchange", lambda: FakeExchange())
+
     # Mock TP placement
     def fake_signed(method, endpoint, params=None, max_retries=3):
         if method == "POST" and endpoint == "/fapi/v1/order":
