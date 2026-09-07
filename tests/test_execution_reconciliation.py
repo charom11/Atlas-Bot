@@ -267,3 +267,56 @@ def test_place_protective_stop_reconciles_timeout(monkeypatch):
 
     assert success is True
     assert algo_id == 999111
+
+
+def test_cancel_existing_stops_for_side_accepts_code_200(monkeypatch):
+    import main
+
+    deleted_endpoints = []
+
+    def fake_signed_request(method, endpoint, params=None, max_retries=3):
+        if method == "GET" and endpoint == "/fapi/v1/openAlgoOrders":
+            return [{
+                "symbol": "BTCUSDT",
+                "positionSide": "LONG",
+                "type": "STOP_MARKET",
+                "closePosition": True,
+                "algoId": 888001
+            }]
+        if method == "DELETE" and endpoint == "/fapi/v1/algoOrder":
+            deleted_endpoints.append((endpoint, params))
+            # Binance returns HTTP 200 inside JSON payload on successful algo deletion
+            return {"algoId": 888001, "clientAlgoId": "test_algo", "code": "200", "msg": "success"}
+        if method == "GET" and endpoint == "/fapi/v1/openOrders":
+            return []
+        return []
+
+    monkeypatch.setattr(main, "binance_futures_signed_request", fake_signed_request)
+    count = main.cancel_existing_protective_stops("BTCUSDT", "LONG")
+    assert count == 1
+    assert len(deleted_endpoints) == 1
+    assert deleted_endpoints[0][1]["algoId"] == 888001
+
+
+def test_cancel_binance_order_by_id_algo_code_200(monkeypatch):
+    import main
+
+    called = []
+
+    def fake_signed_request(method, endpoint, params=None, max_retries=3):
+        called.append((method, endpoint, params))
+        if method == "DELETE" and endpoint == "/fapi/v1/algoOrder":
+            return {"algoId": 2000001415267591, "clientAlgoId": "x-test", "code": "200", "msg": "success"}
+        if method == "DELETE" and endpoint == "/fapi/v1/order":
+            # Should NOT be reached if algo deletion succeeds with code 200
+            raise AssertionError("Regular order cancellation should not be attempted when algo deletion returns code 200")
+        return {}
+
+    monkeypatch.setattr(main, "binance_futures_signed_request", fake_signed_request)
+    res = main.cancel_binance_order_by_id("BTCUSDT", algo_id=2000001415267591)
+    assert res is not None
+    assert res.get("code") == "200"
+    assert res.get("msg") == "success"
+    assert len(called) == 1
+    assert called[0][1] == "/fapi/v1/algoOrder"
+

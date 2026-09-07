@@ -1451,7 +1451,8 @@ def cancel_existing_protective_stops(symbol, position_side=None):
                     algo_id = a.get('algoId')
                     if algo_id:
                         result = binance_futures_signed_request('DELETE', '/fapi/v1/algoOrder', {'algoId': int(algo_id)})
-                        if not isinstance(result, dict) or result.get('code') is not None:
+                        code_val = str(result.get('code')) if isinstance(result, dict) and result.get('code') is not None else None
+                        if not isinstance(result, dict) or (code_val is not None and code_val != '200'):
                             print(f"[STOP RECONCILE WARN] Failed to cancel Algo stop #{algo_id}: {result}", flush=True)
                             return None
                         cancelled_count += 1
@@ -1473,7 +1474,8 @@ def cancel_existing_protective_stops(symbol, position_side=None):
                     oid = o.get('orderId')
                     if oid:
                         result = binance_futures_signed_request('DELETE', '/fapi/v1/order', {'symbol': symbol, 'orderId': oid})
-                        if not isinstance(result, dict) or result.get('code') is not None:
+                        code_val = str(result.get('code')) if isinstance(result, dict) and result.get('code') is not None else None
+                        if not isinstance(result, dict) or (code_val is not None and code_val != '200'):
                             print(f"[STOP RECONCILE WARN] Failed to cancel regular stop #{oid}: {result}", flush=True)
                             return None
                         cancelled_count += 1
@@ -1538,10 +1540,12 @@ def cancel_binance_order_by_id(symbol, order_id=None, algo_id=None):
 
         if is_likely_algo:
             res_algo = binance_futures_signed_request('DELETE', '/fapi/v1/algoOrder', {'algoId': int(oid)})
-            if isinstance(res_algo, dict) and 'code' not in res_algo:
-                return res_algo
-            if isinstance(res_algo, dict) and res_algo.get('code') not in [-1021, -1001]:
-                return binance_futures_signed_request('DELETE', '/fapi/v1/order', {'symbol': symbol, 'orderId': oid})
+            if isinstance(res_algo, dict):
+                code_val = str(res_algo.get('code')) if res_algo.get('code') is not None else None
+                if code_val in ('200', None) or 'algoId' in res_algo:
+                    return res_algo
+                if res_algo.get('code') not in [-1021, -1001]:
+                    return binance_futures_signed_request('DELETE', '/fapi/v1/order', {'symbol': symbol, 'orderId': oid})
             return res_algo
 
         res = binance_futures_signed_request('DELETE', '/fapi/v1/order', {'symbol': symbol, 'orderId': oid})
