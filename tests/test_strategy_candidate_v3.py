@@ -5,6 +5,7 @@ from strategy_candidate_v3 import (
     EXIT_THRESHOLD, FLAT, LONG, SHORT,
     choose_leverage, enforce_portfolio_limits, generate_strategy_signal,
     rank_assets, risk_based_notional, structure_stop, trailing_stop,
+    backtest_frame,
 )
 
 
@@ -81,3 +82,21 @@ def test_rank_assets_training_only():
     out=rank_assets(m)
     assert out.iloc[0].symbol=="A"
     assert "C" not in out.symbol.tolist()
+
+
+def test_backtest_frame_execution_signal_shifted():
+    df = make_ohlcv(n=250)
+    res = backtest_frame(df, fast=True)
+    assert "execution_signal" in res.columns
+    assert res["execution_signal"].iloc[0] == FLAT
+    assert (res["execution_signal"].iloc[1:].values == res["signal"].iloc[:-1].values).all()
+
+
+def test_backtest_frame_vectorized_equivalence():
+    df = make_ohlcv(n=235)
+    fast_res = backtest_frame(df, fast=True)
+    slow_res = backtest_frame(df, fast=False)
+    assert (fast_res["signal"].values == slow_res["signal"].values).all()
+    assert (fast_res["regime"].values == slow_res["regime"].values).all()
+    assert np.allclose(fast_res["score"].values, slow_res["score"].values, atol=1e-5)
+
