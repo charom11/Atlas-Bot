@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from strategy_candidate_v4 import *
+from strategy_candidate_v4 import _atr
 
 def make_ohlcv(n=260, trend=0.0005, vol=0.003):
     rng=np.random.default_rng(7); rets=trend+rng.normal(0,vol,n); close=100*np.exp(np.cumsum(rets))
@@ -45,3 +46,15 @@ def test_rank_assets():
 def test_backtest_execution_is_shifted():
     d=make_ohlcv(); r=backtest_frame(d); assert len(r)==len(d); assert r.execution_signal.iloc[0]==FLAT
     assert (r.execution_signal.iloc[1:].values==r.signal.iloc[:-1].values).all()
+
+def test_manage_position_giveback_protection():
+    x=manage_position(LONG,100,95,110,20,0.8,0.4,2)
+    assert x['action']==EXIT and 'giveback' in x['reason']
+
+def test_vectorized_equivalence():
+    d=make_ohlcv(n=250)
+    fast_df = backtest_frame(d, fast=True)
+    slow_df = backtest_frame(d, fast=False)
+    assert (fast_df["signal"].values == slow_df["signal"].values).all()
+    assert (fast_df["execution_signal"].values == slow_df["execution_signal"].values).all()
+
