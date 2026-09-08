@@ -38,6 +38,39 @@ SHADOW_SYMBOLS = list(TIER_1) + list(TIER_2)
 BINANCE_KLINES_URL = "https://fapi.binance.com/fapi/v1/klines"
 
 
+def fetch_market_friction_context() -> dict[str, dict]:
+    """Fetch live bookTicker (bid, ask, spread) and premiumIndex (funding rate) across universe."""
+    context = {}
+    try:
+        resp = requests.get("https://fapi.binance.com/fapi/v1/ticker/bookTicker", timeout=5)
+        if resp.status_code == 200:
+            for item in resp.json():
+                sym = item.get("symbol")
+                if sym in SHADOW_SYMBOLS:
+                    bid = float(item["bidPrice"])
+                    ask = float(item["askPrice"])
+                    mid = (bid + ask) / 2.0 if (bid + ask) > 0 else 1.0
+                    spread_usd = ask - bid
+                    spread_bps = (spread_usd / mid) * 10000.0
+                    context[sym] = {
+                        "bid": bid,
+                        "ask": ask,
+                        "spread_usd": spread_usd,
+                        "spread_bps": spread_bps,
+                        "funding_rate_8h": 0.0001,
+                        "latency_ms": 0.0,
+                    }
+        resp_f = requests.get("https://fapi.binance.com/fapi/v1/premiumIndex", timeout=5)
+        if resp_f.status_code == 200:
+            for item in resp_f.json():
+                sym = item.get("symbol")
+                if sym in context:
+                    context[sym]["funding_rate_8h"] = float(item.get("lastFundingRate", 0.0001))
+    except Exception as e:
+        pass
+    return context
+
+
 def fetch_closed_15m_klines(symbol: str, limit: int = 250) -> pd.DataFrame | None:
     """Fetch completed 15m candles from Binance public REST API."""
     params = {"symbol": symbol, "interval": "15m", "limit": limit}
@@ -69,6 +102,7 @@ def fetch_closed_15m_klines(symbol: str, limit: int = 250) -> pd.DataFrame | Non
             })
 
         df = pd.DataFrame(data, index=dates)
+        df.attrs["last_bar_close_ms"] = int(closed_bars[-1][6])
         return df
     except Exception as e:
         print(f"[SHADOW FETCH ERROR] Failed to fetch klines for {symbol}: {e}", flush=True)
@@ -76,15 +110,23 @@ def fetch_closed_15m_klines(symbol: str, limit: int = 250) -> pd.DataFrame | Non
 
 
 def run_shadow_cycle(engine: V931ShadowEngine, verbose: bool = True) -> dict:
-    """Execute one scan across all monitored universe symbols."""
+    """Execute one scan across all monitored universe symbols with empirical friction telemetry."""
     cycle_stats = {"evaluated": 0, "admitted": 0, "outcomes": 0}
+    market_contexts = fetch_market_friction_context()
 
     for symbol in SHADOW_SYMBOLS:
         df = fetch_closed_15m_klines(symbol, limit=250)
         if df is None or len(df) <= 201:
             continue
 
-        opp, outcomes = engine.evaluate_bar(symbol, df)
+        sym_ctx = market_contexts.get(symbol, {
+            "bid": 0.0, "ask": 0.0, "spread_usd": 0.0, "spread_bps": 0.0, "funding_rate_8h": 0.0001, "latency_ms": 0.0
+        })
+        close_ms = df.attrs.get("last_bar_close_ms")
+        if close_ms:
+            sym_ctx["latency_ms"] = max(0, int(time.time() * 1000) - close_ms)
+
+        opp, outcomes = engine.evaluate_bar(symbol, df, market_context=sym_ctx)
         cycle_stats["evaluated"] += 1
 
         if opp:
@@ -94,6 +136,7 @@ def run_shadow_cycle(engine: V931ShadowEngine, verbose: bool = True) -> dict:
                 print(
                     f"[SHADOW ADMITTED] 🎯 [{opp.timestamp}] [{symbol}] {opp.setup} {side_str} "
                     f"@ ${opp.entry_price:,.4f} | ATR: {opp.atr:.4f} | Score: {opp.score} | Conf: {opp.confirmations} "
+                    f"| Spread: {sym_ctx['spread_bps']:.1f}bps | Funding: {sym_ctx['funding_rate_8h']*100:.4f}% | Latency: {sym_ctx['latency_ms']}ms "
                     f"-> SL: ${opp.stop_price:,.4f} | TP: ${opp.target_price:,.4f}",
                     flush=True,
                 )
@@ -108,8 +151,8 @@ def run_shadow_cycle(engine: V931ShadowEngine, verbose: bool = True) -> dict:
             status_icon = "🟢" if outcome.net_r > 0 else "🔴"
             print(
                 f"[SHADOW OUTCOME] 🏁 [{outcome.symbol}] {outcome.setup} {outcome.outcome_type} {status_icon} "
-                f"-> Net R: {outcome.net_r:+.2f} R (Gross: {outcome.gross_r:+.2f} R, Held: {outcome.bars_held} bars) "
-                f"Entry: ${outcome.entry_price:,.4f} | Exit: ${outcome.exit_price:,.4f}",
+                f"-> Net R: {outcome.net_r:+.2f} R (Empirical Net: {outcome.empirical_net_r:+.2f} R, Slip: {outcome.realized_slippage_r:+.3f}R, Funding: {outcome.realized_funding_r:+.3f}R) "
+                f"Entry: ${outcome.entry_price:,.4f} | Exit: ${outcome.exit_price:,.4f} | Held: {outcome.bars_held} bars",
                 flush=True,
             )
 

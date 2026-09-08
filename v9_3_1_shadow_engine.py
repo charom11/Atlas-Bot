@@ -65,13 +65,20 @@ class ShadowPosition:
     bars_held: int = 0
     max_favorable_price: float = 0.0
     max_adverse_price: float = 0.0
+    entry_bid: float = 0.0
+    entry_ask: float = 0.0
+    spread_bps: float = 0.0
+    funding_rate_8h: float = 0.0
+    latency_ms: float = 0.0
 
     def to_dict(self) -> dict:
         return asdict(self)
 
     @classmethod
     def from_dict(cls, d: dict) -> ShadowPosition:
-        return cls(**d)
+        valid_keys = {f.name for f in cls.__dataclass_fields__.values()}
+        filtered = {k: v for k, v in d.items() if k in valid_keys}
+        return cls(**filtered)
 
 
 @dataclass
@@ -93,9 +100,22 @@ class ShadowOutcome:
     friction_r: float
     bars_held: int
     resolved_at: str
+    entry_spread_bps: float = 0.0
+    exit_spread_bps: float = 0.0
+    realized_slippage_r: float = 0.0
+    realized_funding_r: float = 0.0
+    total_friction_r: float = 0.026
+    empirical_net_r: float = 0.0
+    latency_ms: float = 0.0
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> ShadowOutcome:
+        valid_keys = {f.name for f in cls.__dataclass_fields__.values()}
+        filtered = {k: v for k, v in d.items() if k in valid_keys}
+        return cls(**filtered)
 
 
 class V931ShadowEngine:
@@ -157,6 +177,7 @@ class V931ShadowEngine:
         self,
         symbol: str,
         df: pd.DataFrame,
+        market_context: Optional[dict] = None,
     ) -> tuple[Optional[ShadowOpportunity], list[ShadowOutcome]]:
         """Process a completed 15m candle for symbol.
 
@@ -186,7 +207,7 @@ class V931ShadowEngine:
 
         # 1. Update any existing open shadow position using latest candle
         if symbol in self.open_positions:
-            outcome = self._update_position(symbol, last_row, bar_timestamp)
+            outcome = self._update_position(symbol, last_row, bar_timestamp, market_context=market_context)
             if outcome:
                 resolved_outcomes.append(outcome)
 
@@ -194,14 +215,14 @@ class V931ShadowEngine:
         if symbol in self.pending_admissions and symbol not in self.open_positions:
             pending_opp = self.pending_admissions.pop(symbol)
             open_px = float(last_row["open"])
-            self._open_shadow_position(pending_opp, open_px, bar_timestamp)
+            self._open_shadow_position(pending_opp, open_px, bar_timestamp, market_context=market_context)
 
         # 3. Evaluate the latest closed candle for candidate opportunities
         votes = setup_votes(last_row, prev_row)
         opp = admit_opportunity(last_row, votes, self.config)
 
         # Log opportunity telemetry
-        self._record_opportunity(opp, bar_timestamp, symbol)
+        self._record_opportunity(opp, bar_timestamp, symbol, market_context=market_context)
 
         if opp and opp.admitted and symbol not in self.open_positions:
             # Stage for next-bar open execution
@@ -219,8 +240,9 @@ class V931ShadowEngine:
         opp: ShadowOpportunity,
         entry_price: float,
         bar_timestamp: str,
+        market_context: Optional[dict] = None,
     ) -> ShadowPosition:
-        """Initialize and register an admitted forward shadow trade."""
+        """Initialize and register an admitted forward shadow trade with friction telemetry."""
         stop_mult, target_mult = target_stop_atr(opp.setup, self.config)
         stop_price = entry_price - opp.side * stop_mult * opp.atr
         target_price = entry_price + opp.side * target_mult * opp.atr
@@ -242,6 +264,11 @@ class V931ShadowEngine:
             bars_held=0,
             max_favorable_price=entry_price,
             max_adverse_price=entry_price,
+            entry_bid=market_context.get("bid", 0.0) if market_context else 0.0,
+            entry_ask=market_context.get("ask", 0.0) if market_context else 0.0,
+            spread_bps=market_context.get("spread_bps", 0.0) if market_context else 0.0,
+            funding_rate_8h=market_context.get("funding_rate_8h", 0.0) if market_context else 0.0,
+            latency_ms=market_context.get("latency_ms", 0.0) if market_context else 0.0,
         )
         self.open_positions[opp.symbol] = pos
         return pos
@@ -251,8 +278,9 @@ class V931ShadowEngine:
         symbol: str,
         row: pd.Series,
         bar_timestamp: str,
+        market_context: Optional[dict] = None,
     ) -> Optional[ShadowOutcome]:
-        """Check stop, target, or timeout on the current candle."""
+        """Check stop, target, or timeout on the current candle with empirical friction accounting."""
         pos = self.open_positions[symbol]
         pos.bars_held += 1
 
@@ -290,6 +318,24 @@ class V931ShadowEngine:
         gross_r = pos.side * (exit_px - pos.entry_price) / denom
         net_r = gross_r - self.friction_r
 
+        # Empirical execution friction measurement
+        exit_bid = market_context.get("bid", exit_px) if market_context else exit_px
+        exit_ask = market_context.get("ask", exit_px) if market_context else exit_px
+        exit_spread_bps = market_context.get("spread_bps", 0.0) if market_context else 0.0
+
+        if pos.side == LONG:
+            entry_slip_usd = max(0.0, (pos.entry_ask - pos.entry_price)) if pos.entry_ask > 0 else 0.0
+            exit_slip_usd = max(0.0, (exit_px - exit_bid)) if exit_bid > 0 else 0.0
+        else:
+            entry_slip_usd = max(0.0, (pos.entry_price - pos.entry_bid)) if pos.entry_bid > 0 else 0.0
+            exit_slip_usd = max(0.0, (exit_ask - exit_px)) if exit_ask > 0 else 0.0
+
+        slip_r = (entry_slip_usd + exit_slip_usd) / denom
+        funding_rate = pos.funding_rate_8h if pos.funding_rate_8h != 0 else (market_context.get("funding_rate_8h", 0.0001) if market_context else 0.0001)
+        funding_r = (pos.bars_held / 32.0) * funding_rate * (pos.entry_price / denom)
+        total_friction_r = self.friction_r + slip_r + funding_r
+        empirical_net_r = gross_r - total_friction_r
+
         outcome = ShadowOutcome(
             position_id=pos.position_id,
             symbol=pos.symbol,
@@ -308,6 +354,13 @@ class V931ShadowEngine:
             friction_r=self.friction_r,
             bars_held=pos.bars_held,
             resolved_at=datetime.now(timezone.utc).isoformat(),
+            entry_spread_bps=pos.spread_bps,
+            exit_spread_bps=exit_spread_bps,
+            realized_slippage_r=round(slip_r, 4),
+            realized_funding_r=round(funding_r, 4),
+            total_friction_r=round(total_friction_r, 4),
+            empirical_net_r=round(empirical_net_r, 4),
+            latency_ms=market_context.get("latency_ms", 0.0) if market_context else 0.0,
         )
 
         del self.open_positions[symbol]
@@ -319,6 +372,7 @@ class V931ShadowEngine:
         opp: Optional[ShadowOpportunity],
         bar_timestamp: str,
         symbol: str,
+        market_context: Optional[dict] = None,
     ) -> None:
         """Append opportunity evaluation to JSON Lines log."""
         record = {
@@ -336,6 +390,9 @@ class V931ShadowEngine:
             "target_price": opp.target_price if opp else 0.0,
             "atr": opp.atr if opp else 0.0,
             "rejection_reason": opp.rejection_reason if opp else "No candidate opportunity found",
+            "spread_bps": market_context.get("spread_bps", 0.0) if market_context else 0.0,
+            "funding_rate_8h": market_context.get("funding_rate_8h", 0.0) if market_context else 0.0,
+            "latency_ms": market_context.get("latency_ms", 0.0) if market_context else 0.0,
         }
         try:
             with open(self.opps_file, "a", encoding="utf-8") as f:
