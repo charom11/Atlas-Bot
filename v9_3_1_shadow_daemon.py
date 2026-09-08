@@ -39,7 +39,7 @@ BINANCE_KLINES_URL = "https://fapi.binance.com/fapi/v1/klines"
 
 
 def fetch_market_friction_context() -> dict[str, dict]:
-    """Fetch live bookTicker (bid, ask, spread) and premiumIndex (funding rate) across universe."""
+    """Fetch live bookTicker (bid, ask, spread, depth) and premiumIndex (funding, mark price) across universe."""
     context = {}
     try:
         resp = requests.get("https://fapi.binance.com/fapi/v1/ticker/bookTicker", timeout=5)
@@ -49,14 +49,19 @@ def fetch_market_friction_context() -> dict[str, dict]:
                 if sym in SHADOW_SYMBOLS:
                     bid = float(item["bidPrice"])
                     ask = float(item["askPrice"])
+                    bid_qty = float(item.get("bidQty", 0.0))
+                    ask_qty = float(item.get("askQty", 0.0))
                     mid = (bid + ask) / 2.0 if (bid + ask) > 0 else 1.0
                     spread_usd = ask - bid
                     spread_bps = (spread_usd / mid) * 10000.0
                     context[sym] = {
                         "bid": bid,
                         "ask": ask,
+                        "bid_qty": bid_qty,
+                        "ask_qty": ask_qty,
                         "spread_usd": spread_usd,
                         "spread_bps": spread_bps,
+                        "mark_price": mid,
                         "funding_rate_8h": 0.0001,
                         "latency_ms": 0.0,
                     }
@@ -66,6 +71,7 @@ def fetch_market_friction_context() -> dict[str, dict]:
                 sym = item.get("symbol")
                 if sym in context:
                     context[sym]["funding_rate_8h"] = float(item.get("lastFundingRate", 0.0001))
+                    context[sym]["mark_price"] = float(item.get("markPrice", context[sym]["mark_price"]))
     except Exception as e:
         pass
     return context
@@ -120,7 +126,9 @@ def run_shadow_cycle(engine: V931ShadowEngine, verbose: bool = True) -> dict:
             continue
 
         sym_ctx = market_contexts.get(symbol, {
-            "bid": 0.0, "ask": 0.0, "spread_usd": 0.0, "spread_bps": 0.0, "funding_rate_8h": 0.0001, "latency_ms": 0.0
+            "bid": 0.0, "ask": 0.0, "bid_qty": 0.0, "ask_qty": 0.0,
+            "spread_usd": 0.0, "spread_bps": 0.0, "mark_price": 0.0,
+            "funding_rate_8h": 0.0001, "latency_ms": 0.0,
         })
         close_ms = df.attrs.get("last_bar_close_ms")
         if close_ms:
