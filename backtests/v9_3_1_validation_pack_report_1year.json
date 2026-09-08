@@ -1,0 +1,205 @@
+{
+  "candidate": "V9.3.1",
+  "dataset": "1year",
+  "portfolio": {
+    "trades": 8485,
+    "wins": 3428,
+    "win_rate": 0.4040070713022982,
+    "profit_factor": 1.061698189253352,
+    "net_r": 316.8398428119427,
+    "expectancy_r": 0.03734117181048234,
+    "max_drawdown_r": 96.77589227104272,
+    "avg_bars_held": 6.336240424278138
+  },
+  "benchmark_comparison": {
+    "benchmark": {
+      "trades": 8485,
+      "profit_factor": 1.06,
+      "net_r": 316.84,
+      "expectancy_r": 0.0373
+    },
+    "trades_diff": 0,
+    "pf_diff": 0.0016981892533518561,
+    "r_diff": -0.00015718805730102758
+  },
+  "cost_stress": {
+    "Base VIP0 (0.026 R)": {
+      "friction_r": 0.026,
+      "profit_factor": 1.06,
+      "net_r": 316.84,
+      "expectancy_r": 0.0373,
+      "profitable": "True"
+    },
+    "Stressed +25% (0.0325 R)": {
+      "friction_r": 0.0325,
+      "profit_factor": 1.05,
+      "net_r": 261.69,
+      "expectancy_r": 0.0308,
+      "profitable": "True"
+    },
+    "Stressed +50% (0.040 R)": {
+      "friction_r": 0.04,
+      "profit_factor": 1.04,
+      "net_r": 198.05,
+      "expectancy_r": 0.0233,
+      "profitable": "True"
+    },
+    "Stressed +100% (0.052 R)": {
+      "friction_r": 0.052,
+      "profit_factor": 1.02,
+      "net_r": 96.23,
+      "expectancy_r": 0.0113,
+      "profitable": "True"
+    },
+    "Severe +130% (0.060 R)": {
+      "friction_r": 0.06,
+      "profit_factor": 1.01,
+      "net_r": 28.35,
+      "expectancy_r": 0.0033,
+      "profitable": "True"
+    }
+  },
+  "asset_loo": {
+    "SUIUSDT": {
+      "excluded_r": 74.12,
+      "remaining_r": 242.72,
+      "retained_pct": 76.6,
+      "profit_factor": 1.0557886941557832
+    },
+    "SOLUSDT": {
+      "excluded_r": 52.73,
+      "remaining_r": 264.11,
+      "retained_pct": 83.4,
+      "profit_factor": 1.061827588518603
+    },
+    "XRPUSDT": {
+      "excluded_r": 31.84,
+      "remaining_r": 285.0,
+      "retained_pct": 90.0,
+      "profit_factor": 1.0665276484966417
+    },
+    "BTCUSDT": {
+      "excluded_r": 52.78,
+      "remaining_r": 264.06,
+      "retained_pct": 83.3,
+      "profit_factor": 1.0622155542356413
+    },
+    "DOGEUSDT": {
+      "excluded_r": 39.56,
+      "remaining_r": 277.28,
+      "retained_pct": 87.5,
+      "profit_factor": 1.064303962386183
+    },
+    "ETHUSDT": {
+      "excluded_r": 65.81,
+      "remaining_r": 251.03,
+      "retained_pct": 79.2,
+      "profit_factor": 1.059570918126687
+    }
+  },
+  "setup_loo": {
+    "TREND_CONTINUATION": {
+      "excluded_r": 68.42,
+      "remaining_r": 248.42,
+      "retained_pct": 78.4,
+      "profit_factor": 1.058714310747427
+    },
+    "BREAKOUT_RETEST": {
+      "excluded_r": -1.98,
+      "remaining_r": 318.82,
+      "retained_pct": 100.6,
+      "profit_factor": 1.0621462257694747
+    },
+    "MSS_SHIFT": {
+      "excluded_r": 239.89,
+      "remaining_r": 76.95,
+      "retained_pct": 24.3,
+      "profit_factor": 1.0672434701877298
+    },
+    "BB_ATR_EXPANSION": {
+      "excluded_r": 10.51,
+      "remaining_r": 306.33,
+      "retained_pct": 96.7,
+      "profit_factor": 1.0625104706712818
+    }
+  },
+  "regime_loo": {
+    "STRONG_TREND": {
+      "excluded_r": 8.33,
+      "remaining_r": 308.51,
+      "retained_pct": 97.4,
+      "profit_factor": 1.061432585625686
+    },
+    "HIGH_VOL": {
+      "excluded_r": 279.57,
+      "remaining_r": 37.27,
+      "retained_pct": 11.8,
+      "profit_factor": 1.02708293532758
+    },
+    "MILD_TREND": {
+      "excluded_r": 28.93,
+      "remaining_r": 287.91,
+      "retained_pct": 90.9,
+      "profit_factor": 1.0743412978661735
+    }
+  },
+  "streak_info": {
+    "max_loss_streak": 22,
+    "total_streaks": 1411,
+    "avg_loss_streak": 3.58
+  },
+  "quarterly_performance": {
+    "2025-Q3": {
+      "trades": 1916,
+      "win_rate": 40.0,
+      "profit_factor": 1.0568825937527242,
+      "net_r": 66.4,
+      "expectancy_r": 0.0347
+    },
+    "2025-Q4": {
+      "trades": 1848,
+      "win_rate": 41.7,
+      "profit_factor": 1.1137521378691309,
+      "net_r": 124.26,
+      "expectancy_r": 0.0672
+    },
+    "2026-Q1": {
+      "trades": 1896,
+      "win_rate": 39.9,
+      "profit_factor": 1.0314771945651884,
+      "net_r": 36.48,
+      "expectancy_r": 0.0192
+    },
+    "2026-Q2": {
+      "trades": 1861,
+      "win_rate": 40.1,
+      "profit_factor": 1.0508029523515763,
+      "net_r": 57.47,
+      "expectancy_r": 0.0309
+    },
+    "2026-Q3": {
+      "trades": 964,
+      "win_rate": 40.2,
+      "profit_factor": 1.0550528737007803,
+      "net_r": 32.23,
+      "expectancy_r": 0.0334
+    }
+  },
+  "bootstrap_ci": {
+    "mean_expectancy": 0.03734117181048234,
+    "ci_low_95": 0.00945110457956603,
+    "ci_high_95": 0.06474875577529131,
+    "ci_excludes_zero": "True"
+  },
+  "gate_checks": {
+    "1. Parity Exact Match (Trades & Net R)": "True",
+    "2. Look-Ahead Bias Eliminated (Next-bar open, conservative fill)": true,
+    "3. Multi-Asset Profitability (All 6 assets net positive)": true,
+    "4. Non-Concentration (Positive without BTC+SOL)": "True",
+    "5. Cost Stress Resilience (Survives +50% friction)": "True",
+    "6. Temporal Stability (>60% of quarters profitable)": true,
+    "7. Statistical Edge (Expectancy > 0)": "True"
+  },
+  "all_pass": true,
+  "elapsed_seconds": 22.226848363876343
+}

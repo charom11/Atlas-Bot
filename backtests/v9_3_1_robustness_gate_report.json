@@ -1,0 +1,765 @@
+{
+  "candidate": "V9.3.1",
+  "verdict": "\ud83d\udfe1 CONDITIONAL",
+  "recommendation": "Aggregate performance is solidly positive (+505.52 R 4Y, +449.53 R OOS) with zero engine/asset dependency, but robustness shows sensitivity to volatility slippage and drawdown depth. Continue shadow validation; no paper integration yet.",
+  "portfolio": {
+    "trades": 29359,
+    "wins": 11629,
+    "win_rate": 0.3960965972955482,
+    "profit_factor": 1.028037290933618,
+    "net_r": 505.5245622830919,
+    "expectancy_r": 0.017218725511192204,
+    "max_drawdown_r": 217.59987979301724,
+    "avg_bars_held": 6.284955209646105
+  },
+  "monte_carlo": {
+    "iterations": 5000,
+    "sample_size": 29359,
+    "median_return_r": 509.42,
+    "pct_5_return_r": 127.92,
+    "pct_1_return_r": -12.38,
+    "prob_negative_return_pct": 1.2,
+    "median_max_dd_r": 137.46,
+    "pct_95_max_dd_r": 213.21,
+    "worst_simulated_dd_r": 340.18,
+    "prob_ruin_50r_pct": 31.58,
+    "prob_ruin_100r_pct": 7.96,
+    "prob_ruin_200r_pct": 0.42,
+    "median_losing_streak": 19,
+    "pct_95_losing_streak": 24,
+    "worst_simulated_losing_streak": 40
+  },
+  "monthly_performance": {
+    "total_months": 49,
+    "profitable_months": 29,
+    "profitable_month_pct": 59.2,
+    "best_month": {
+      "month": "2024-07",
+      "net_r": 136.69,
+      "pf": 1.3828341413227356,
+      "trades": 657
+    },
+    "worst_month": {
+      "month": "2023-09",
+      "net_r": -82.78,
+      "pf": 0.7819209114827962,
+      "trades": 565
+    },
+    "max_consecutive_losing_months": 3,
+    "by_month": {
+      "2022-09": {
+        "trades": 473,
+        "win_rate": 36.8,
+        "profit_factor": 0.91422419608804,
+        "net_r": -26.1,
+        "expectancy_r": -0.0552
+      },
+      "2022-10": {
+        "trades": 550,
+        "win_rate": 40.9,
+        "profit_factor": 1.0908478687635168,
+        "net_r": 29.8,
+        "expectancy_r": 0.0542
+      },
+      "2022-11": {
+        "trades": 483,
+        "win_rate": 40.2,
+        "profit_factor": 1.0694404986464774,
+        "net_r": 20.29,
+        "expectancy_r": 0.042
+      },
+      "2022-12": {
+        "trades": 450,
+        "win_rate": 43.8,
+        "profit_factor": 1.2103381846105938,
+        "net_r": 53.53,
+        "expectancy_r": 0.119
+      },
+      "2023-01": {
+        "trades": 543,
+        "win_rate": 38.1,
+        "profit_factor": 0.9431841034861371,
+        "net_r": -19.51,
+        "expectancy_r": -0.0359
+      },
+      "2023-02": {
+        "trades": 503,
+        "win_rate": 37.6,
+        "profit_factor": 0.9327649600551594,
+        "net_r": -21.53,
+        "expectancy_r": -0.0428
+      },
+      "2023-03": {
+        "trades": 526,
+        "win_rate": 37.1,
+        "profit_factor": 0.9142703148578324,
+        "net_r": -28.94,
+        "expectancy_r": -0.055
+      },
+      "2023-04": {
+        "trades": 519,
+        "win_rate": 40.1,
+        "profit_factor": 1.059178851738595,
+        "net_r": 18.67,
+        "expectancy_r": 0.036
+      },
+      "2023-05": {
+        "trades": 606,
+        "win_rate": 36.8,
+        "profit_factor": 0.9089934466882031,
+        "net_r": -35.43,
+        "expectancy_r": -0.0585
+      },
+      "2023-06": {
+        "trades": 609,
+        "win_rate": 40.1,
+        "profit_factor": 1.0502306178741443,
+        "net_r": 18.55,
+        "expectancy_r": 0.0305
+      },
+      "2023-07": {
+        "trades": 602,
+        "win_rate": 37.9,
+        "profit_factor": 0.926534808720588,
+        "net_r": -27.96,
+        "expectancy_r": -0.0464
+      },
+      "2023-08": {
+        "trades": 635,
+        "win_rate": 38.4,
+        "profit_factor": 0.9609450928822961,
+        "net_r": -15.52,
+        "expectancy_r": -0.0244
+      },
+      "2023-09": {
+        "trades": 565,
+        "win_rate": 33.3,
+        "profit_factor": 0.7819209114827962,
+        "net_r": -82.78,
+        "expectancy_r": -0.1465
+      },
+      "2023-10": {
+        "trades": 658,
+        "win_rate": 41.5,
+        "profit_factor": 1.1107146574425872,
+        "net_r": 43.47,
+        "expectancy_r": 0.0661
+      },
+      "2023-11": {
+        "trades": 640,
+        "win_rate": 37.8,
+        "profit_factor": 0.9521260259862906,
+        "net_r": -19.39,
+        "expectancy_r": -0.0303
+      },
+      "2023-12": {
+        "trades": 651,
+        "win_rate": 40.2,
+        "profit_factor": 1.0704223546344573,
+        "net_r": 27.75,
+        "expectancy_r": 0.0426
+      },
+      "2024-01": {
+        "trades": 642,
+        "win_rate": 42.5,
+        "profit_factor": 1.1507049014437376,
+        "net_r": 56.69,
+        "expectancy_r": 0.0883
+      },
+      "2024-02": {
+        "trades": 691,
+        "win_rate": 38.2,
+        "profit_factor": 0.9652072095163701,
+        "net_r": -15.14,
+        "expectancy_r": -0.0219
+      },
+      "2024-03": {
+        "trades": 680,
+        "win_rate": 37.8,
+        "profit_factor": 0.9695417861243901,
+        "net_r": -13.17,
+        "expectancy_r": -0.0194
+      },
+      "2024-04": {
+        "trades": 582,
+        "win_rate": 39.0,
+        "profit_factor": 1.0124711984936685,
+        "net_r": 4.5,
+        "expectancy_r": 0.0077
+      },
+      "2024-05": {
+        "trades": 687,
+        "win_rate": 39.2,
+        "profit_factor": 1.0053345703145804,
+        "net_r": 2.27,
+        "expectancy_r": 0.0033
+      },
+      "2024-06": {
+        "trades": 581,
+        "win_rate": 37.2,
+        "profit_factor": 0.9329068147344396,
+        "net_r": -24.87,
+        "expectancy_r": -0.0428
+      },
+      "2024-07": {
+        "trades": 657,
+        "win_rate": 46.6,
+        "profit_factor": 1.3828341413227356,
+        "net_r": 136.69,
+        "expectancy_r": 0.2081
+      },
+      "2024-08": {
+        "trades": 608,
+        "win_rate": 42.3,
+        "profit_factor": 1.1210371601758566,
+        "net_r": 43.28,
+        "expectancy_r": 0.0712
+      },
+      "2024-09": {
+        "trades": 660,
+        "win_rate": 35.0,
+        "profit_factor": 0.8403067223620743,
+        "net_r": -70.08,
+        "expectancy_r": -0.1062
+      },
+      "2024-10": {
+        "trades": 682,
+        "win_rate": 39.4,
+        "profit_factor": 1.024341693031359,
+        "net_r": 10.25,
+        "expectancy_r": 0.015
+      },
+      "2024-11": {
+        "trades": 693,
+        "win_rate": 38.2,
+        "profit_factor": 0.9840877813100117,
+        "net_r": -6.92,
+        "expectancy_r": -0.01
+      },
+      "2024-12": {
+        "trades": 643,
+        "win_rate": 38.6,
+        "profit_factor": 0.9940043250726941,
+        "net_r": -2.4,
+        "expectancy_r": -0.0037
+      },
+      "2025-01": {
+        "trades": 656,
+        "win_rate": 38.3,
+        "profit_factor": 0.9791092814764469,
+        "net_r": -8.66,
+        "expectancy_r": -0.0132
+      },
+      "2025-02": {
+        "trades": 501,
+        "win_rate": 39.7,
+        "profit_factor": 1.0255594648689472,
+        "net_r": 7.87,
+        "expectancy_r": 0.0157
+      },
+      "2025-03": {
+        "trades": 561,
+        "win_rate": 37.4,
+        "profit_factor": 0.9491426969325598,
+        "net_r": -18.22,
+        "expectancy_r": -0.0325
+      },
+      "2025-04": {
+        "trades": 620,
+        "win_rate": 41.0,
+        "profit_factor": 1.073824660948917,
+        "net_r": 27.4,
+        "expectancy_r": 0.0442
+      },
+      "2025-05": {
+        "trades": 671,
+        "win_rate": 39.5,
+        "profit_factor": 1.0328695446882636,
+        "net_r": 13.68,
+        "expectancy_r": 0.0204
+      },
+      "2025-06": {
+        "trades": 623,
+        "win_rate": 41.7,
+        "profit_factor": 1.1225169982683005,
+        "net_r": 45.35,
+        "expectancy_r": 0.0728
+      },
+      "2025-07": {
+        "trades": 689,
+        "win_rate": 38.6,
+        "profit_factor": 1.001394648813305,
+        "net_r": 0.6,
+        "expectancy_r": 0.0009
+      },
+      "2025-08": {
+        "trades": 620,
+        "win_rate": 43.9,
+        "profit_factor": 1.246836478628968,
+        "net_r": 87.23,
+        "expectancy_r": 0.1407
+      },
+      "2025-09": {
+        "trades": 641,
+        "win_rate": 38.2,
+        "profit_factor": 0.9652362299531079,
+        "net_r": -13.92,
+        "expectancy_r": -0.0217
+      },
+      "2025-10": {
+        "trades": 609,
+        "win_rate": 44.5,
+        "profit_factor": 1.2669721036167807,
+        "net_r": 91.73,
+        "expectancy_r": 0.1506
+      },
+      "2025-11": {
+        "trades": 580,
+        "win_rate": 40.0,
+        "profit_factor": 1.0487362757505927,
+        "net_r": 17.16,
+        "expectancy_r": 0.0296
+      },
+      "2025-12": {
+        "trades": 659,
+        "win_rate": 40.5,
+        "profit_factor": 1.0387423958148678,
+        "net_r": 15.37,
+        "expectancy_r": 0.0233
+      },
+      "2026-01": {
+        "trades": 695,
+        "win_rate": 40.4,
+        "profit_factor": 1.0438467810268772,
+        "net_r": 18.44,
+        "expectancy_r": 0.0265
+      },
+      "2026-02": {
+        "trades": 554,
+        "win_rate": 42.8,
+        "profit_factor": 1.1800435078395342,
+        "net_r": 57.72,
+        "expectancy_r": 0.1042
+      },
+      "2026-03": {
+        "trades": 647,
+        "win_rate": 36.8,
+        "profit_factor": 0.9050539695298996,
+        "net_r": -39.68,
+        "expectancy_r": -0.0613
+      },
+      "2026-04": {
+        "trades": 627,
+        "win_rate": 38.9,
+        "profit_factor": 1.0053830885896102,
+        "net_r": 2.09,
+        "expectancy_r": 0.0033
+      },
+      "2026-05": {
+        "trades": 613,
+        "win_rate": 43.4,
+        "profit_factor": 1.1934839425316024,
+        "net_r": 68.27,
+        "expectancy_r": 0.1114
+      },
+      "2026-06": {
+        "trades": 621,
+        "win_rate": 38.2,
+        "profit_factor": 0.9669045239820253,
+        "net_r": -12.9,
+        "expectancy_r": -0.0208
+      },
+      "2026-07": {
+        "trades": 657,
+        "win_rate": 41.1,
+        "profit_factor": 1.1039308703427575,
+        "net_r": 40.88,
+        "expectancy_r": 0.0622
+      },
+      "2026-08": {
+        "trades": 669,
+        "win_rate": 41.7,
+        "profit_factor": 1.1225063831628823,
+        "net_r": 48.82,
+        "expectancy_r": 0.073
+      },
+      "2026-09": {
+        "trades": 27,
+        "win_rate": 37.0,
+        "profit_factor": 1.0173053152721314,
+        "net_r": 0.29,
+        "expectancy_r": 0.0107
+      }
+    }
+  },
+  "engine_robustness": {
+    "baseline": {
+      "trades": 29359,
+      "net_r": 505.52,
+      "profit_factor": 1.028037290933618
+    },
+    "standalone": {
+      "MSS_SHIFT": {
+        "trades": 22868,
+        "net_r": 294.87,
+        "profit_factor": 1.0211775516042154,
+        "win_rate": 40.2,
+        "expectancy_r": 0.0129
+      },
+      "TREND_CONTINUATION": {
+        "trades": 4855,
+        "net_r": 147.89,
+        "profit_factor": 1.0471855530561949,
+        "win_rate": 36.2,
+        "expectancy_r": 0.0305
+      },
+      "BREAKOUT_RETEST": {
+        "trades": 19,
+        "net_r": 3.91,
+        "profit_factor": 1.3807017543859712,
+        "win_rate": 47.4,
+        "expectancy_r": 0.2056
+      },
+      "BB_ATR_EXPANSION": {
+        "trades": 1617,
+        "net_r": 58.86,
+        "profit_factor": 1.0611667395694457,
+        "win_rate": 41.1,
+        "expectancy_r": 0.0364
+      }
+    },
+    "ablation": {
+      "MSS_SHIFT": {
+        "ablated_setup": "MSS_SHIFT",
+        "ablated_r": 294.87,
+        "remaining_trades": 6491,
+        "remaining_net_r": 210.65,
+        "retained_pct": 41.7,
+        "remaining_pf": 1.0512949694853502,
+        "profitable": "True"
+      },
+      "TREND_CONTINUATION": {
+        "ablated_setup": "TREND_CONTINUATION",
+        "ablated_r": 147.89,
+        "remaining_trades": 24504,
+        "remaining_net_r": 357.64,
+        "retained_pct": 70.7,
+        "remaining_pf": 1.0240085351066,
+        "profitable": "True"
+      },
+      "BREAKOUT_RETEST": {
+        "ablated_setup": "BREAKOUT_RETEST",
+        "ablated_r": 3.91,
+        "remaining_trades": 29340,
+        "remaining_net_r": 501.62,
+        "retained_pct": 99.2,
+        "remaining_pf": 1.0278364972498943,
+        "profitable": "True"
+      },
+      "BB_ATR_EXPANSION": {
+        "ablated_setup": "BB_ATR_EXPANSION",
+        "ablated_r": 58.86,
+        "remaining_trades": 27742,
+        "remaining_net_r": 446.66,
+        "retained_pct": 88.4,
+        "remaining_pf": 1.026169413031471,
+        "profitable": "True"
+      }
+    }
+  },
+  "asset_robustness": {
+    "leave_one_out": [
+      {
+        "excluded_asset": "XRPUSDT",
+        "excluded_r": 19.47,
+        "remaining_trades": 24605,
+        "remaining_net_r": 486.05,
+        "retained_pct": 96.1,
+        "remaining_pf": 1.0322277597658844,
+        "profitable": "True"
+      },
+      {
+        "excluded_asset": "SUIUSDT",
+        "excluded_r": 33.47,
+        "remaining_trades": 25375,
+        "remaining_net_r": 472.06,
+        "retained_pct": 93.4,
+        "remaining_pf": 1.0303252505355867,
+        "profitable": "True"
+      },
+      {
+        "excluded_asset": "DOGEUSDT",
+        "excluded_r": 65.45,
+        "remaining_trades": 24478,
+        "remaining_net_r": 440.07,
+        "retained_pct": 87.1,
+        "remaining_pf": 1.029309910990359,
+        "profitable": "True"
+      },
+      {
+        "excluded_asset": "ETHUSDT",
+        "excluded_r": 75.25,
+        "remaining_trades": 24008,
+        "remaining_net_r": 430.28,
+        "retained_pct": 85.1,
+        "remaining_pf": 1.0291900214726826,
+        "profitable": "True"
+      },
+      {
+        "excluded_asset": "BTCUSDT",
+        "excluded_r": 139.11,
+        "remaining_trades": 24025,
+        "remaining_net_r": 366.41,
+        "retained_pct": 72.5,
+        "remaining_pf": 1.024765300854641,
+        "profitable": "True"
+      },
+      {
+        "excluded_asset": "SOLUSDT",
+        "excluded_r": 172.78,
+        "remaining_trades": 24304,
+        "remaining_net_r": 332.75,
+        "retained_pct": 65.8,
+        "remaining_pf": 1.0222523320600188,
+        "profitable": "True"
+      }
+    ],
+    "leave_two_out": [
+      {
+        "pair": "SUIUSDT + XRPUSDT",
+        "excluded_r": 52.94,
+        "remaining_trades": 20621,
+        "remaining_net_r": 452.59,
+        "retained_pct": 89.5,
+        "remaining_pf": 1.0358686403344877,
+        "profitable": "True"
+      },
+      {
+        "pair": "XRPUSDT + DOGEUSDT",
+        "excluded_r": 84.92,
+        "remaining_trades": 19724,
+        "remaining_net_r": 420.6,
+        "retained_pct": 83.2,
+        "remaining_pf": 1.0348588224881112,
+        "profitable": "True"
+      },
+      {
+        "pair": "XRPUSDT + ETHUSDT",
+        "excluded_r": 94.72,
+        "remaining_trades": 19254,
+        "remaining_net_r": 410.81,
+        "retained_pct": 81.3,
+        "remaining_pf": 1.0348378564266636,
+        "profitable": "True"
+      },
+      {
+        "pair": "SUIUSDT + DOGEUSDT",
+        "excluded_r": 98.92,
+        "remaining_trades": 20494,
+        "remaining_net_r": 406.61,
+        "retained_pct": 80.4,
+        "remaining_pf": 1.0323975181932787,
+        "profitable": "True"
+      },
+      {
+        "pair": "SUIUSDT + ETHUSDT",
+        "excluded_r": 108.71,
+        "remaining_trades": 20024,
+        "remaining_net_r": 396.81,
+        "retained_pct": 78.5,
+        "remaining_pf": 1.032322460870932,
+        "profitable": "True"
+      },
+      {
+        "pair": "DOGEUSDT + ETHUSDT",
+        "excluded_r": 140.7,
+        "remaining_trades": 19127,
+        "remaining_net_r": 364.82,
+        "retained_pct": 72.2,
+        "remaining_pf": 1.031116262376683,
+        "profitable": "True"
+      },
+      {
+        "pair": "XRPUSDT + BTCUSDT",
+        "excluded_r": 158.58,
+        "remaining_trades": 19271,
+        "remaining_net_r": 346.94,
+        "retained_pct": 68.6,
+        "remaining_pf": 1.029285697530427,
+        "profitable": "True"
+      },
+      {
+        "pair": "SUIUSDT + BTCUSDT",
+        "excluded_r": 172.58,
+        "remaining_trades": 20041,
+        "remaining_net_r": 332.95,
+        "retained_pct": 65.9,
+        "remaining_pf": 1.026999724484874,
+        "profitable": "True"
+      },
+      {
+        "pair": "SOLUSDT + XRPUSDT",
+        "excluded_r": 192.25,
+        "remaining_trades": 19550,
+        "remaining_net_r": 313.28,
+        "retained_pct": 62.0,
+        "remaining_pf": 1.026096003085735,
+        "profitable": "True"
+      },
+      {
+        "pair": "BTCUSDT + DOGEUSDT",
+        "excluded_r": 204.56,
+        "remaining_trades": 19144,
+        "remaining_net_r": 300.96,
+        "retained_pct": 59.5,
+        "remaining_pf": 1.0255496732840084,
+        "profitable": "True"
+      },
+      {
+        "pair": "SUIUSDT + SOLUSDT",
+        "excluded_r": 206.24,
+        "remaining_trades": 20320,
+        "remaining_net_r": 299.28,
+        "retained_pct": 59.2,
+        "remaining_pf": 1.0239627372593294,
+        "profitable": "True"
+      },
+      {
+        "pair": "BTCUSDT + ETHUSDT",
+        "excluded_r": 214.36,
+        "remaining_trades": 18674,
+        "remaining_net_r": 291.16,
+        "retained_pct": 57.6,
+        "remaining_pf": 1.0253065483709378,
+        "profitable": "True"
+      },
+      {
+        "pair": "SOLUSDT + DOGEUSDT",
+        "excluded_r": 238.23,
+        "remaining_trades": 19423,
+        "remaining_net_r": 267.3,
+        "retained_pct": 52.9,
+        "remaining_pf": 1.0223914232523112,
+        "profitable": "True"
+      },
+      {
+        "pair": "SOLUSDT + ETHUSDT",
+        "excluded_r": 248.02,
+        "remaining_trades": 18953,
+        "remaining_net_r": 257.5,
+        "retained_pct": 50.9,
+        "remaining_pf": 1.0220774174801999,
+        "profitable": "True"
+      },
+      {
+        "pair": "SOLUSDT + BTCUSDT",
+        "excluded_r": 311.89,
+        "remaining_trades": 18970,
+        "remaining_net_r": 193.64,
+        "retained_pct": 38.3,
+        "remaining_pf": 1.0165241451446219,
+        "profitable": "True"
+      }
+    ]
+  },
+  "capacity_and_stress": {
+    "turnover": {
+      "avg_bars_held": 6.3,
+      "avg_hours_held": 1.57,
+      "avg_daily_trades": 20.1,
+      "median_daily_trades": 20,
+      "pct_95_daily_trades": 32,
+      "max_daily_trades": 51,
+      "max_hourly_trades": 11
+    },
+    "concurrency_and_signals": {
+      "max_concurrent_positions": 6,
+      "avg_concurrent_positions": 1.96,
+      "concurrency_distribution_pct": {
+        "1_positions": 45.2,
+        "2_positions": 28.5,
+        "3_positions": 16.1,
+        "4_positions": 6.9,
+        "5_positions": 2.7,
+        "6_positions": 0.7
+      },
+      "simultaneous_signals_pct": {
+        "1_simultaneous": 70.15,
+        "2_simultaneous": 17.35,
+        "3_simultaneous": 7.08,
+        "4_simultaneous": 3.48,
+        "5_simultaneous": 1.51,
+        "6_simultaneous": 0.43
+      }
+    },
+    "volatility_slippage_stress": {
+      "description": "2x friction (0.052 R) during HIGH_VOL, 0.026 R elsewhere",
+      "net_r": -64.99,
+      "profit_factor": 1.0,
+      "profitable": "False"
+    },
+    "funding_drag_stress": {
+      "description": "0.006 R holding fee per 8h funding cycle (32 bars)",
+      "net_r": 470.93,
+      "profit_factor": 1.03,
+      "profitable": "True"
+    },
+    "combined_extreme_stress": {
+      "description": "Volatility Slippage (2x in HIGH_VOL) + Proportional Funding Drag",
+      "net_r": -99.59,
+      "profit_factor": 0.99,
+      "profitable": "False"
+    }
+  },
+  "walk_forward_freeze": {
+    "TRAIN (Sep 2022 - Dec 2023)": {
+      "trades": 9013,
+      "win_rate": 38.8,
+      "profit_factor": 0.988380497263455,
+      "net_r": -65.11,
+      "expectancy_r": -0.0072,
+      "profitable": "False"
+    },
+    "VALIDATE (Jan 2024 - Dec 2024)": {
+      "trades": 7806,
+      "win_rate": 39.5,
+      "profit_factor": 1.0251661584196567,
+      "net_r": 121.1,
+      "expectancy_r": 0.0155,
+      "profitable": "True"
+    },
+    "OOS #1 (Jan 2025 - Dec 2025)": {
+      "trades": 7430,
+      "win_rate": 40.3,
+      "profit_factor": 1.058809139353585,
+      "net_r": 265.59,
+      "expectancy_r": 0.0357,
+      "profitable": "True"
+    },
+    "OOS #2 (Jan 2026 - Sep 2026)": {
+      "trades": 5083,
+      "win_rate": 40.4,
+      "profit_factor": 1.0595869896172558,
+      "net_r": 183.65,
+      "expectancy_r": 0.0361,
+      "profitable": "True"
+    },
+    "COMBINED OOS (2025-2026)": {
+      "trades": 12540,
+      "win_rate": 40.3,
+      "profit_factor": 1.0590332098039321,
+      "net_r": 449.53,
+      "expectancy_r": 0.0358,
+      "profitable": "True"
+    }
+  },
+  "decision_checklist": {
+    "1. Monte Carlo Order Permutation (Worst DD acceptable, 0% ruin)": false,
+    "2. Monthly Performance Consistency (>60% profitable months)": false,
+    "3. Engine Robustness (All ablations positive, MSS not a single point of failure)": true,
+    "4. Asset Robustness (All 15 Leave-Two-Out pairs remain profitable)": "True",
+    "5. Realistic Friction & Funding (Survives vol-slippage + funding drag)": "False",
+    "6. Pure Out-Of-Sample Integrity (2025-2026 OOS PF >= 1.05)": "True"
+  },
+  "elapsed_seconds": 104.45755219459534
+}
