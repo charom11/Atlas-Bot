@@ -25,6 +25,44 @@ if sys.stdout and hasattr(sys.stdout, "reconfigure"):
     except Exception:
         pass
 
+
+class TeeLogger:
+    """Tees stdout/stderr stream directly to disk while preserving console output."""
+    def __init__(self, filepaths: list[Path], stream):
+        self.files = []
+        for fp in filepaths:
+            try:
+                self.files.append(open(fp, "a", encoding="utf-8", buffering=1))
+            except Exception:
+                pass
+        self.stream = stream
+
+    def write(self, data):
+        if self.stream:
+            try:
+                self.stream.write(data)
+                self.stream.flush()
+            except Exception:
+                pass
+        for f in self.files:
+            try:
+                f.write(data)
+                f.flush()
+            except Exception:
+                pass
+
+    def flush(self):
+        if self.stream:
+            try:
+                self.stream.flush()
+            except Exception:
+                pass
+        for f in self.files:
+            try:
+                f.flush()
+            except Exception:
+                pass
+
 from strategy_candidate_v9_3_1 import (
     TIER_1,
     TIER_2,
@@ -203,6 +241,7 @@ def main():
     parser.add_argument("--status", action="store_true", help="Display current telemetry status summary and exit")
     parser.add_argument("--poll-interval", type=int, default=15, help="Polling interval in seconds (default: 15)")
     parser.add_argument("--data-dir", default="data/shadow_v9_3_1", help="Telemetry storage path")
+    parser.add_argument("--log-file", default="v9_3_1_shadow_daemon.log", help="Path to mirror daemon log output (default: v9_3_1_shadow_daemon.log)")
     args = parser.parse_args()
 
     engine = V931ShadowEngine(data_dir=args.data_dir)
@@ -218,6 +257,12 @@ def main():
         print_telemetry_status(engine)
         return
 
+    # Mirror continuous daemon output directly to workspace log files
+    if args.log_file:
+        log_paths = [Path(args.log_file), Path("task-67.log")]
+        sys.stdout = TeeLogger(log_paths, sys.stdout)
+        sys.stderr = TeeLogger(log_paths, sys.stderr)
+
     print("=" * 90, flush=True)
     print(" 🚀 CANDIDATE V9.3.1 SHADOW TELEMETRY OBSERVER DAEMON INITIALIZED", flush=True)
     print("=" * 90, flush=True)
@@ -225,6 +270,7 @@ def main():
     print(f" Monitored Symbols:    {', '.join(SHADOW_SYMBOLS)}", flush=True)
     print(f" Polling Interval:     Every {args.poll_interval}s", flush=True)
     print(f" Storage Directory:    {args.data_dir}", flush=True)
+    print(f" Workspace Log File:   {args.log_file} (+ task-67.log)", flush=True)
     print("=" * 90 + "\n", flush=True)
 
     last_status_print = 0.0
