@@ -1,5 +1,5 @@
 @echo off
-TITLE Weather-Ensemble AI - Laptop Watchdog (Self-Healing & Auto-Setup)
+TITLE Weather-Ensemble AI - Laptop Watchdog (Self-Healing and Auto-Setup)
 COLOR 0A
 
 :: =============================================================================
@@ -20,7 +20,7 @@ echo =========================================================================
 echo  ⚡ WEATHER-ENSEMBLE AI - LAPTOP WATCHDOG INITIALIZER
 echo =========================================================================
 echo  • Working Directory: %CD%
-echo  • Mode:              Auto-Detecting Python & Environment...
+echo  • Mode:              Auto-Detecting Python and Environment...
 echo =========================================================================
 echo.
 

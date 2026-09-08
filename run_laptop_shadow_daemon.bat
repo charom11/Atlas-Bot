@@ -1,26 +1,27 @@
 @echo off
-TITLE Weather-Ensemble AI - Laptop Watchdog (Self-Healing and Auto-Setup)
-COLOR 0A
+TITLE V9.3.1 Shadow Observer Daemon - Laptop Watchdog
+COLOR 0B
 
 :: =============================================================================
-:: ⚡ WEATHER-ENSEMBLE AI - LAPTOP AUTONOMOUS WATCHDOG
+:: ⚡ V9.3.1 SHADOW OBSERVER DAEMON - LAPTOP WATCHDOG
 :: =============================================================================
 :: Designed specifically for portable laptop environments (e.g. C:\downloads\...)
 :: Features:
-::  1. Auto-resolves Python (.venv, system PATH, py launcher, or AppData)
-::  2. Automatically checks and installs missing dependencies (pip)
-::  3. Validates .env configuration and prevents blind crash loops
-::  4. Circuit breaker: Suppresses infinite restart loops if bot crashes in < 10s
-::  5. Prevents Windows PC Sleep on AC power while trading
+::  1. Auto-detects Python (.venv, system PATH, py launcher, or AppData)
+::  2. Auto-verifies and installs required libraries (pandas, numpy, requests)
+::  3. Zero-Risk Observer: Uses public Binance data (no API trading keys required)
+::  4. Circuit breaker: Suppresses infinite restart loops if daemon crashes in < 10s
+::  5. Prevents Windows PC Sleep on AC power while tracking forward telemetry
 :: =============================================================================
 
 cd /d "%~dp0"
 
 echo =========================================================================
-echo  ⚡ WEATHER-ENSEMBLE AI - LAPTOP WATCHDOG INITIALIZER
+echo  📡 V9.3.1 SHADOW TELEMETRY OBSERVER - LAPTOP WATCHDOG
 echo =========================================================================
 echo  • Working Directory: %CD%
-echo  • Mode:              Auto-Detecting Python and Environment...
+echo  • Safety Boundary:   STRICT OBSERVER (Zero live orders / Read-only)
+echo  • Monitored Assets:  SOL, SUI, XRP, BTC, DOGE, ETH
 echo =========================================================================
 echo.
 
@@ -78,14 +79,13 @@ if not defined PYTHON_EXE (
     echo =========================================================================
     echo  ❌ [ERROR] PYTHON WAS NOT FOUND ON THIS LAPTOP!
     echo =========================================================================
-    echo  The watchdog cannot run because Python is not installed or not in PATH.
+    echo  The shadow daemon cannot run because Python is not installed.
     echo.
     echo  HOW TO FIX:
-    echo  1. Download and install Python 3.10, 3.11, or 3.12 from:
+    echo  1. Download Python 3.10, 3.11, or 3.12 from:
     echo     https://www.python.org/downloads/
-    echo  2. IMPORTANT: During installation, CHECK the box that says:
-    echo     "Add python.exe to PATH"
-    echo  3. After installation completes, double-click this script again.
+    echo  2. IMPORTANT: CHECK "Add python.exe to PATH" during installation.
+    echo  3. After installing, double-click this script again.
     echo =========================================================================
     echo.
     pause
@@ -97,115 +97,93 @@ echo [OK] Python Engine Resolved: %PYTHON_EXE%
 echo.
 
 :: -----------------------------------------------------------------------------
-:: STEP 2: VERIFY .ENV CONFIGURATION
+:: STEP 2: VERIFY CORE LIBRARIES FOR SHADOW TELEMETRY
 :: -----------------------------------------------------------------------------
-if not exist "%~dp0.env" (
-    COLOR 0E
-    echo -------------------------------------------------------------------------
-    echo  ⚠️ [CONFIG WARNING] .env file not found in %CD%
-    if exist "%~dp0.env.example" (
-        echo  Creating initial .env template from .env.example...
-        copy "%~dp0.env.example" "%~dp0.env" >nul
-        echo  [OK] Created .env template. Please enter your API keys inside .env!
-    ) else (
-        echo  Please create a .env file with your BINANCE_API_KEY and BINANCE_API_SECRET.
-    )
-    echo -------------------------------------------------------------------------
-    echo.
-    timeout /t 3 >nul
-    COLOR 0A
-)
-
-:: -----------------------------------------------------------------------------
-:: STEP 3: VERIFY CORE DEPENDENCIES
-:: -----------------------------------------------------------------------------
-echo Checking Python dependencies (pandas, requests, dotenv, ccxt)...
-%PYTHON_EXE% -c "import pandas, requests, dotenv, ccxt" >nul 2>&1
+echo Checking Python libraries (pandas, numpy, requests)...
+%PYTHON_EXE% -c "import pandas, numpy, requests" >nul 2>&1
 if errorlevel 1 (
     echo.
-    echo  📦 [DEPENDENCY NOTICE] Missing required libraries on this laptop.
-    echo  Installing dependencies from requirements.txt...
+    echo  📦 [DEPENDENCY NOTICE] Installing required libraries (pandas, numpy, requests)...
     echo.
     %PYTHON_EXE% -m pip install --upgrade pip >nul 2>&1
-    if exist "%~dp0requirements.txt" (
-        %PYTHON_EXE% -m pip install -r "%~dp0requirements.txt"
-    ) else (
-        %PYTHON_EXE% -m pip install pandas numpy scipy requests ccxt websocket-client psutil python-dotenv rich
-    )
+    %PYTHON_EXE% -m pip install pandas numpy requests
     if errorlevel 1 (
         COLOR 0C
         echo.
-        echo ❌ Failed to install dependencies. Please check your internet connection.
+        echo ❌ Failed to install dependencies. Check your internet connection.
         pause
         exit /b 1
     )
     echo.
-    echo [OK] All dependencies successfully installed!
+    echo [OK] All shadow dependencies successfully installed!
     echo.
 ) else (
-    echo [OK] Dependencies verified.
+    echo [OK] Libraries verified.
+)
+
+:: Ensure telemetry data directory exists
+if not exist "%~dp0data\shadow_v9_3_1" (
+    mkdir "%~dp0data\shadow_v9_3_1" >nul 2>&1
 )
 
 :: -----------------------------------------------------------------------------
-:: STEP 4: PREVENT WINDOWS SLEEP (AC POWER)
+:: STEP 3: PREVENT WINDOWS SLEEP (AC POWER)
 :: -----------------------------------------------------------------------------
 powercfg /change standby-timeout-ac 0 >nul 2>&1
 
 :: -----------------------------------------------------------------------------
-:: STEP 5: WATCHDOG EXECUTION LOOP WITH CIRCUIT BREAKER
+:: STEP 4: WATCHDOG LOOP WITH CIRCUIT BREAKER
 :: -----------------------------------------------------------------------------
 echo.
 echo =========================================================================
-echo  🚀 STARTING 24/7 AUTONOMOUS LAPTOP WATCHDOG
+echo  🚀 STARTING V9.3.1 SHADOW OBSERVER DAEMON
 echo =========================================================================
-echo  • Target Script: main.py
-echo  • Sizing Mode:   Dynamic Margin (3%% Risk, 50x Leverage Cap)
-echo  • Circuit Break: Auto-pause on instant crash to prevent restart loop
+echo  • Polling Frequency: Every 15 seconds
+echo  • Local Log:         v9_3_1_shadow_daemon.log
+echo  • Telemetry Output:  data\shadow_v9_3_1\
 echo =========================================================================
 echo.
 
 :WATCHDOG_LOOP
 for /f %%i in ('powershell -command "[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()"') do set "START_TIME=%%i"
 
-echo [%date% %time%] [WATCHDOG] Launching Weather-Ensemble Trading Engine...
+echo [%date% %time%] [WATCHDOG] Booting V9.3.1 Shadow Daemon...
 echo.
 
-:: Launch the bot
-%PYTHON_EXE% -u main.py --trade-live --sizing-mode margin --margin-pct 0.03 --leverage 50 --threshold 30 --timeframe 15m --max-positions 5 --directional-cap 5
-set "BOT_EXIT_CODE=%ERRORLEVEL%"
+:: Launch the shadow daemon
+%PYTHON_EXE% -u v9_3_1_shadow_daemon.py --poll-interval 15 --log-file v9_3_1_shadow_daemon.log
+set "DAEMON_EXIT_CODE=%ERRORLEVEL%"
 
 for /f %%i in ('powershell -command "[DateTimeOffset]::UtcNow.ToUnixTimeSeconds() - %START_TIME%"') do set "RUN_DURATION=%%i"
 
 echo.
 echo =========================================================================
-echo  ⚠️ [%date% %time%] [WATCHDOG EVENT] Process Exited (Code: %BOT_EXIT_CODE%)
+echo  ⚠️ [%date% %time%] [WATCHDOG EVENT] Daemon Exited (Code: %DAEMON_EXIT_CODE%)
 echo  • Run Duration: %RUN_DURATION% seconds
 echo =========================================================================
 
-:: CIRCUIT BREAKER: If the bot died in under 10 seconds, it's a critical crash or config error!
-:: DO NOT blindly restart in an infinite loop!
+:: CIRCUIT BREAKER: If it stopped in under 10 seconds, pause the restart loop!
 if %RUN_DURATION% LSS 10 (
     COLOR 0C
     echo.
-    echo  🚨 [CIRCUIT BREAKER TRIGGERED] 
-    echo  The bot stopped immediately within %RUN_DURATION% seconds!
+    echo  🚨 [CIRCUIT BREAKER TRIGGERED]
+    echo  The shadow daemon exited immediately within %RUN_DURATION% seconds!
     echo  Possible causes:
-    echo   1. Missing or invalid Binance API keys in .env
-    echo   2. Network/VPN connection blocked to fapi.binance.com
-    echo   3. Syntax or import error in custom scripts
+    echo   1. Network issue reaching Binance public API (fapi.binance.com)
+    echo   2. Missing strategy files in the folder
     echo.
-    echo  The restart loop has been PAUSED to let you read the error above.
+    echo  The restart loop is PAUSED so you can inspect the error above.
     echo =========================================================================
     echo.
-    echo Press any key to retry starting the bot, or close this window to exit.
+    echo Press any key to retry, or close this window to exit.
     pause >nul
-    COLOR 0A
+    COLOR 0B
     goto WATCHDOG_LOOP
 )
 
-:: Normal Watchdog behavior for long runs (network disconnect or reboot)
+:: Normal auto-restart after network disconnect or temporary glitch
 COLOR 0E
-echo 🔄 Auto-restarting daemon in 5 seconds... (Press Ctrl+C to cancel)
+echo 🔄 Auto-restarting shadow daemon in 5 seconds... (Press Ctrl+C to cancel)
 timeout /t 5 /nobreak >nul
-COLOR 0A
+COLOR 0B
 goto WATCHDOG_LOOP
