@@ -65,19 +65,73 @@ class ShadowPosition:
     bars_held: int = 0
     max_favorable_price: float = 0.0
     max_adverse_price: float = 0.0
+    # Layer 1 — Strategy
+    predicted_entry: float = 0.0
+    predicted_stop: float = 0.0
+    predicted_target: float = 0.0
+    predicted_r: float = 2.0
+    # Layer 2 — Market
     entry_bid: float = 0.0
     entry_ask: float = 0.0
+    spread_usd: float = 0.0
     spread_bps: float = 0.0
+    mark_price: float = 0.0
+    volatility_atr_pct: float = 0.0
     funding_rate_8h: float = 0.0
+    bid_qty: float = 0.0
+    ask_qty: float = 0.0
+    # Layer 3 — Execution Simulation
+    theoretical_candle_open_fill: float = 0.0
+    observable_market_price_fill: float = 0.0
+    estimated_realistic_fill: float = 0.0
+    entry_slippage_r: float = 0.0
     latency_ms: float = 0.0
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        d = asdict(self)
+        d["layer1_strategy"] = {
+            "predicted_entry": self.predicted_entry or self.entry_price,
+            "predicted_stop": self.predicted_stop or self.stop_price,
+            "predicted_target": self.predicted_target or self.target_price,
+            "setup": self.setup,
+            "regime": self.regime,
+            "asset": self.symbol,
+            "predicted_r": self.predicted_r,
+        }
+        d["layer2_market"] = {
+            "bid_at_signal": self.entry_bid,
+            "ask_at_signal": self.entry_ask,
+            "spread_usd": self.spread_usd,
+            "spread_bps": self.spread_bps,
+            "mark_price": self.mark_price,
+            "volatility_atr_pct": self.volatility_atr_pct,
+            "funding_rate_8h": self.funding_rate_8h,
+            "order_book_depth": {
+                "bid_qty": self.bid_qty,
+                "ask_qty": self.ask_qty,
+            },
+        }
+        d["layer3_execution"] = {
+            "theoretical_candle_open_fill": self.theoretical_candle_open_fill or self.entry_price,
+            "observable_market_price_fill": self.observable_market_price_fill or self.entry_price,
+            "estimated_realistic_fill": self.estimated_realistic_fill or self.entry_price,
+            "entry_slippage_r": self.entry_slippage_r,
+            "latency_ms": self.latency_ms,
+        }
+        return d
 
     @classmethod
     def from_dict(cls, d: dict) -> ShadowPosition:
         valid_keys = {f.name for f in cls.__dataclass_fields__.values()}
         filtered = {k: v for k, v in d.items() if k in valid_keys}
+        if "predicted_entry" not in filtered and "entry_price" in filtered:
+            filtered["predicted_entry"] = filtered["entry_price"]
+        if "predicted_stop" not in filtered and "stop_price" in filtered:
+            filtered["predicted_stop"] = filtered["stop_price"]
+        if "predicted_target" not in filtered and "target_price" in filtered:
+            filtered["predicted_target"] = filtered["target_price"]
+        if "theoretical_candle_open_fill" not in filtered and "entry_price" in filtered:
+            filtered["theoretical_candle_open_fill"] = filtered["entry_price"]
         return cls(**filtered)
 
 
@@ -100,21 +154,91 @@ class ShadowOutcome:
     friction_r: float
     bars_held: int
     resolved_at: str
+    # Layer 1 — Strategy
+    predicted_entry: float = 0.0
+    predicted_stop: float = 0.0
+    predicted_target: float = 0.0
+    predicted_r: float = 2.0
+    # Layer 2 — Market
+    bid_at_signal: float = 0.0
+    ask_at_signal: float = 0.0
+    spread_usd: float = 0.0
+    spread_bps: float = 0.0
+    mark_price: float = 0.0
+    volatility_atr_pct: float = 0.0
+    funding_rate_8h: float = 0.0
+    bid_qty: float = 0.0
+    ask_qty: float = 0.0
+    # Layer 3 — Execution Simulation
+    theoretical_candle_open_fill: float = 0.0
+    observable_market_price_fill: float = 0.0
+    estimated_realistic_fill: float = 0.0
+    exit_theoretical_fill: float = 0.0
+    exit_realistic_fill: float = 0.0
+    slippage_in_r: float = 0.0
+    funding_drag_in_r: float = 0.0
+    theoretical_net_r: float = 0.0
+    final_net_r: float = 0.0
+    latency_ms: float = 0.0
     entry_spread_bps: float = 0.0
     exit_spread_bps: float = 0.0
     realized_slippage_r: float = 0.0
     realized_funding_r: float = 0.0
     total_friction_r: float = 0.026
     empirical_net_r: float = 0.0
-    latency_ms: float = 0.0
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        d = asdict(self)
+        d["layer1_strategy"] = {
+            "predicted_entry": self.predicted_entry or self.entry_price,
+            "predicted_stop": self.predicted_stop or self.stop_price,
+            "predicted_target": self.predicted_target or self.target_price,
+            "setup": self.setup,
+            "regime": self.regime,
+            "asset": self.symbol,
+            "predicted_r": self.predicted_r,
+        }
+        d["layer2_market"] = {
+            "bid_at_signal": self.bid_at_signal or self.entry_price,
+            "ask_at_signal": self.ask_at_signal or self.entry_price,
+            "spread_usd": self.spread_usd,
+            "spread_bps": self.spread_bps or self.entry_spread_bps,
+            "mark_price": self.mark_price or self.entry_price,
+            "volatility_atr_pct": self.volatility_atr_pct,
+            "funding_rate_8h": self.funding_rate_8h,
+            "order_book_depth": {
+                "bid_qty": self.bid_qty,
+                "ask_qty": self.ask_qty,
+            },
+        }
+        d["layer3_execution"] = {
+            "theoretical_candle_open_fill": self.theoretical_candle_open_fill or self.entry_price,
+            "observable_market_price_fill": self.observable_market_price_fill or self.entry_price,
+            "estimated_realistic_fill": self.estimated_realistic_fill or self.entry_price,
+            "slippage_in_r": self.slippage_in_r or self.realized_slippage_r,
+            "funding_drag_in_r": self.funding_drag_in_r or self.realized_funding_r,
+            "theoretical_net_r": self.theoretical_net_r or self.net_r,
+            "final_net_r": self.final_net_r or self.empirical_net_r or self.net_r,
+            "latency_ms": self.latency_ms,
+        }
+        return d
 
     @classmethod
     def from_dict(cls, d: dict) -> ShadowOutcome:
         valid_keys = {f.name for f in cls.__dataclass_fields__.values()}
         filtered = {k: v for k, v in d.items() if k in valid_keys}
+        if "predicted_entry" not in filtered and "entry_price" in filtered:
+            filtered["predicted_entry"] = filtered["entry_price"]
+        if "predicted_stop" not in filtered and "stop_price" in filtered:
+            filtered["predicted_stop"] = filtered["stop_price"]
+        if "predicted_target" not in filtered and "target_price" in filtered:
+            filtered["predicted_target"] = filtered["target_price"]
+        if "theoretical_candle_open_fill" not in filtered and "entry_price" in filtered:
+            filtered["theoretical_candle_open_fill"] = filtered["entry_price"]
+        if "theoretical_net_r" not in filtered and "net_r" in filtered:
+            filtered["theoretical_net_r"] = filtered["net_r"]
+        if "final_net_r" not in filtered and "net_r" in filtered:
+            filtered["final_net_r"] = filtered.get("empirical_net_r", filtered["net_r"])
         return cls(**filtered)
 
 
@@ -205,6 +329,11 @@ class V931ShadowEngine:
         if self.last_evaluated_bar.get(symbol) == bar_timestamp:
             return None, []
 
+        # Inject volatility metric into market_context if available
+        if market_context is not None and "volatility_atr_pct" not in market_context:
+            close_p = float(last_row["close"]) if float(last_row["close"]) > 0 else 1.0
+            market_context["volatility_atr_pct"] = float((last_row.get("atr", 0.0) / close_p) * 100.0)
+
         # 1. Update any existing open shadow position using latest candle
         if symbol in self.open_positions:
             outcome = self._update_position(symbol, last_row, bar_timestamp, market_context=market_context)
@@ -242,11 +371,39 @@ class V931ShadowEngine:
         bar_timestamp: str,
         market_context: Optional[dict] = None,
     ) -> ShadowPosition:
-        """Initialize and register an admitted forward shadow trade with friction telemetry."""
+        """Initialize and register an admitted forward shadow trade with 3-layer audit telemetry."""
         stop_mult, target_mult = target_stop_atr(opp.setup, self.config)
         stop_price = entry_price - opp.side * stop_mult * opp.atr
         target_price = entry_price + opp.side * target_mult * opp.atr
         pos_id = f"{opp.symbol}_{opp.setup}_{int(time.time())}"
+
+        # Layer 1: Strategy predicted R
+        predicted_r = target_mult / stop_mult if stop_mult > 0 else 2.0
+
+        # Layer 2: Market conditions
+        bid = market_context.get("bid", 0.0) if market_context else 0.0
+        ask = market_context.get("ask", 0.0) if market_context else 0.0
+        mid = (bid + ask) / 2.0 if (bid + ask) > 0 else entry_price
+        spread_usd = market_context.get("spread_usd", 0.0) if market_context else 0.0
+        spread_bps = market_context.get("spread_bps", 0.0) if market_context else 0.0
+        mark_price = market_context.get("mark_price", mid) if market_context else mid
+        vol_atr_pct = market_context.get("volatility_atr_pct", 0.0) if market_context else 0.0
+        funding_rate = market_context.get("funding_rate_8h", 0.0001) if market_context else 0.0001
+        bid_qty = market_context.get("bid_qty", 0.0) if market_context else 0.0
+        ask_qty = market_context.get("ask_qty", 0.0) if market_context else 0.0
+        latency_ms = market_context.get("latency_ms", 0.0) if market_context else 0.0
+
+        # Layer 3: Execution simulation (at entry)
+        theoretical_fill = entry_price
+        observable_fill = mid if mid > 0 else entry_price
+        if opp.side == LONG:
+            realistic_fill = max(theoretical_fill, ask) if ask > 0 else theoretical_fill
+        else:
+            realistic_fill = min(theoretical_fill, bid) if bid > 0 else theoretical_fill
+
+        denom = max(abs(entry_price - stop_price), 1e-12)
+        entry_slip_usd = abs(realistic_fill - theoretical_fill)
+        entry_slip_r = entry_slip_usd / denom
 
         pos = ShadowPosition(
             position_id=pos_id,
@@ -264,11 +421,24 @@ class V931ShadowEngine:
             bars_held=0,
             max_favorable_price=entry_price,
             max_adverse_price=entry_price,
-            entry_bid=market_context.get("bid", 0.0) if market_context else 0.0,
-            entry_ask=market_context.get("ask", 0.0) if market_context else 0.0,
-            spread_bps=market_context.get("spread_bps", 0.0) if market_context else 0.0,
-            funding_rate_8h=market_context.get("funding_rate_8h", 0.0) if market_context else 0.0,
-            latency_ms=market_context.get("latency_ms", 0.0) if market_context else 0.0,
+            predicted_entry=entry_price,
+            predicted_stop=stop_price,
+            predicted_target=target_price,
+            predicted_r=round(predicted_r, 2),
+            entry_bid=bid,
+            entry_ask=ask,
+            spread_usd=round(spread_usd, 6),
+            spread_bps=round(spread_bps, 2),
+            mark_price=round(mark_price, 4),
+            volatility_atr_pct=round(vol_atr_pct, 4),
+            funding_rate_8h=funding_rate,
+            bid_qty=bid_qty,
+            ask_qty=ask_qty,
+            theoretical_candle_open_fill=theoretical_fill,
+            observable_market_price_fill=observable_fill,
+            estimated_realistic_fill=realistic_fill,
+            entry_slippage_r=round(entry_slip_r, 4),
+            latency_ms=round(latency_ms, 1),
         )
         self.open_positions[opp.symbol] = pos
         return pos
@@ -280,7 +450,7 @@ class V931ShadowEngine:
         bar_timestamp: str,
         market_context: Optional[dict] = None,
     ) -> Optional[ShadowOutcome]:
-        """Check stop, target, or timeout on the current candle with empirical friction accounting."""
+        """Check stop, target, or timeout on current candle with 3-layer execution simulation."""
         pos = self.open_positions[symbol]
         pos.bars_held += 1
 
@@ -303,38 +473,39 @@ class V931ShadowEngine:
         if not (stop_hit or target_hit or timeout_hit):
             return None
 
-        # Determine outcome
-        if stop_hit:
-            exit_px = pos.stop_price
-            outcome_type = "STOP"
-        elif target_hit:
-            exit_px = pos.target_price
-            outcome_type = "TARGET"
-        else:
-            exit_px = close_px
-            outcome_type = "TIMEOUT"
-
-        denom = max(abs(pos.entry_price - pos.stop_price), 1e-12)
-        gross_r = pos.side * (exit_px - pos.entry_price) / denom
-        net_r = gross_r - self.friction_r
-
-        # Empirical execution friction measurement
-        exit_bid = market_context.get("bid", exit_px) if market_context else exit_px
-        exit_ask = market_context.get("ask", exit_px) if market_context else exit_px
+        # Layer 2: Exit market conditions
+        exit_bid = market_context.get("bid", 0.0) if market_context else 0.0
+        exit_ask = market_context.get("ask", 0.0) if market_context else 0.0
         exit_spread_bps = market_context.get("spread_bps", 0.0) if market_context else 0.0
 
-        if pos.side == LONG:
-            entry_slip_usd = max(0.0, (pos.entry_ask - pos.entry_price)) if pos.entry_ask > 0 else 0.0
-            exit_slip_usd = max(0.0, (exit_px - exit_bid)) if exit_bid > 0 else 0.0
+        # Layer 3: Determine outcome & execution fills
+        if stop_hit:
+            exit_theoretical = pos.stop_price
+            outcome_type = "STOP"
+            exit_realistic = min(pos.stop_price, exit_bid) if pos.side == LONG and exit_bid > 0 else (max(pos.stop_price, exit_ask) if exit_ask > 0 else pos.stop_price)
+        elif target_hit:
+            exit_theoretical = pos.target_price
+            outcome_type = "TARGET"
+            exit_realistic = min(pos.target_price, exit_bid) if pos.side == LONG and exit_bid > 0 else (max(pos.target_price, exit_ask) if exit_ask > 0 else pos.target_price)
         else:
-            entry_slip_usd = max(0.0, (pos.entry_price - pos.entry_bid)) if pos.entry_bid > 0 else 0.0
-            exit_slip_usd = max(0.0, (exit_ask - exit_px)) if exit_ask > 0 else 0.0
+            exit_theoretical = close_px
+            outcome_type = "TIMEOUT"
+            exit_realistic = exit_bid if pos.side == LONG and exit_bid > 0 else (exit_ask if exit_ask > 0 else close_px)
 
-        slip_r = (entry_slip_usd + exit_slip_usd) / denom
+        denom = max(abs(pos.entry_price - pos.stop_price), 1e-12)
+        gross_r = pos.side * (exit_theoretical - pos.entry_price) / denom
+        theoretical_net_r = gross_r - self.friction_r
+
+        # Slippage calculation
+        entry_slip_usd = abs(pos.estimated_realistic_fill - pos.theoretical_candle_open_fill)
+        exit_slip_usd = abs(exit_realistic - exit_theoretical)
+        total_slip_usd = entry_slip_usd + exit_slip_usd
+        total_slip_r = total_slip_usd / denom
+
         funding_rate = pos.funding_rate_8h if pos.funding_rate_8h != 0 else (market_context.get("funding_rate_8h", 0.0001) if market_context else 0.0001)
-        funding_r = (pos.bars_held / 32.0) * funding_rate * (pos.entry_price / denom)
-        total_friction_r = self.friction_r + slip_r + funding_r
-        empirical_net_r = gross_r - total_friction_r
+        funding_drag_r = (pos.bars_held / 32.0) * funding_rate * (pos.entry_price / denom)
+        total_friction_r = self.friction_r + total_slip_r + funding_drag_r
+        final_net_r = gross_r - total_friction_r
 
         outcome = ShadowOutcome(
             position_id=pos.position_id,
@@ -345,22 +516,44 @@ class V931ShadowEngine:
             entry_bar_time=pos.entry_bar_time,
             exit_bar_time=bar_timestamp,
             entry_price=pos.entry_price,
-            exit_price=exit_px,
+            exit_price=exit_theoretical,
             stop_price=pos.stop_price,
             target_price=pos.target_price,
             outcome_type=outcome_type,
             gross_r=gross_r,
-            net_r=net_r,
+            net_r=theoretical_net_r,
             friction_r=self.friction_r,
             bars_held=pos.bars_held,
             resolved_at=datetime.now(timezone.utc).isoformat(),
+            predicted_entry=pos.predicted_entry or pos.entry_price,
+            predicted_stop=pos.predicted_stop or pos.stop_price,
+            predicted_target=pos.predicted_target or pos.target_price,
+            predicted_r=pos.predicted_r,
+            bid_at_signal=pos.entry_bid,
+            ask_at_signal=pos.entry_ask,
+            spread_usd=pos.spread_usd,
+            spread_bps=pos.spread_bps,
+            mark_price=pos.mark_price,
+            volatility_atr_pct=pos.volatility_atr_pct,
+            funding_rate_8h=pos.funding_rate_8h,
+            bid_qty=pos.bid_qty,
+            ask_qty=pos.ask_qty,
+            theoretical_candle_open_fill=pos.theoretical_candle_open_fill or pos.entry_price,
+            observable_market_price_fill=pos.observable_market_price_fill or pos.entry_price,
+            estimated_realistic_fill=pos.estimated_realistic_fill or pos.entry_price,
+            exit_theoretical_fill=exit_theoretical,
+            exit_realistic_fill=exit_realistic,
+            slippage_in_r=round(total_slip_r, 4),
+            funding_drag_in_r=round(funding_drag_r, 4),
+            theoretical_net_r=round(theoretical_net_r, 4),
+            final_net_r=round(final_net_r, 4),
+            latency_ms=market_context.get("latency_ms", 0.0) if market_context else 0.0,
             entry_spread_bps=pos.spread_bps,
             exit_spread_bps=exit_spread_bps,
-            realized_slippage_r=round(slip_r, 4),
-            realized_funding_r=round(funding_r, 4),
+            realized_slippage_r=round(total_slip_r, 4),
+            realized_funding_r=round(funding_drag_r, 4),
             total_friction_r=round(total_friction_r, 4),
-            empirical_net_r=round(empirical_net_r, 4),
-            latency_ms=market_context.get("latency_ms", 0.0) if market_context else 0.0,
+            empirical_net_r=round(final_net_r, 4),
         )
 
         del self.open_positions[symbol]
