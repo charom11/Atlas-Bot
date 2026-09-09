@@ -1,0 +1,212 @@
+{
+  "candidate": "V9.3.1",
+  "test": "shadow_observer_historical_replay",
+  "dataset": "4year",
+  "timeframe": "15m",
+  "universe": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "SOLUSDT",
+    "LINKUSDT",
+    "AVAXUSDT",
+    "XRPUSDT",
+    "ADAUSDT",
+    "DOGEUSDT",
+    "NEARUSDT",
+    "BNBUSDT",
+    "SUIUSDT"
+  ],
+  "eligible_assets": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "SOLUSDT",
+    "XRPUSDT",
+    "DOGEUSDT",
+    "SUIUSDT"
+  ],
+  "config": {
+    "allow_tier_2": true,
+    "allow_tier_3": false,
+    "allow_mild_trend": true,
+    "min_score": 5,
+    "min_confirmations": 1,
+    "trend_stop_atr": 1.25,
+    "trend_target_atr": 2.5,
+    "base_stop_atr": 1.25,
+    "base_target_atr": 2.0,
+    "shadow_mode": true,
+    "max_operating_leverage": 5.0,
+    "max_risk_per_trade_pct": 0.0035,
+    "max_portfolio_risk_pct": 0.015
+  },
+  "replay_config": {
+    "friction_r": 0.026,
+    "max_hold_bars": 32,
+    "warmup_bars": 201,
+    "one_position_per_symbol": true
+  },
+  "observer_policy": {
+    "active_setups": [
+      "BB_ATR_EXPANSION",
+      "BREAKOUT_RETEST",
+      "MSS_SHIFT",
+      "TREND_CONTINUATION"
+    ],
+    "disabled_setups": [
+      "EXHAUSTION_REVERSAL",
+      "FIB_OTE",
+      "LIQUIDITY_SWEEP",
+      "PULLBACK_CONTINUATION",
+      "VWAP_REVERSION",
+      "VWAP_TREND"
+    ],
+    "allowed_regimes": [
+      "HIGH_VOL",
+      "MILD_TREND",
+      "STRONG_TREND"
+    ],
+    "gated_regimes": [
+      "BREAKDOWN",
+      "CHOP",
+      "RANGE"
+    ],
+    "tier_1": [
+      "SUIUSDT",
+      "SOLUSDT",
+      "XRPUSDT"
+    ],
+    "tier_2": [
+      "BTCUSDT",
+      "DOGEUSDT",
+      "ETHUSDT"
+    ],
+    "tier_3": [
+      "LINKUSDT",
+      "ADAUSDT",
+      "NEARUSDT",
+      "AVAXUSDT",
+      "BNBUSDT"
+    ]
+  },
+  "portfolio": {
+    "trades": 34434,
+    "wins": "13523",
+    "win_rate": 0.3927223093454144,
+    "profit_factor": 1.009880283298977,
+    "net_r": 210.27166777583446,
+    "expectancy_r": 0.006106512974845631,
+    "max_drawdown_r": 256.3553694252873,
+    "avg_bars_held": 5.627867805076378
+  },
+  "assets": [
+    {
+      "symbol": "BTCUSDT",
+      "bars": 141088,
+      "opportunities_evaluated": 140887,
+      "admitted": 9373,
+      "resolved": 6242,
+      "stats": {
+        "trades": 6242,
+        "wins": "2503",
+        "win_rate": 0.40099327138737584,
+        "profit_factor": 1.0301440770773502,
+        "net_r": 114.670531224055,
+        "expectancy_r": 0.018370799619361583,
+        "max_drawdown_r": 67.79132854568577,
+        "avg_bars_held": 5.471323293816084
+      }
+    },
+    {
+      "symbol": "ETHUSDT",
+      "bars": 141088,
+      "opportunities_evaluated": 140887,
+      "admitted": 9396,
+      "resolved": 6313,
+      "stats": {
+        "trades": 6313,
+        "wins": "2478",
+        "win_rate": 0.3925233644859813,
+        "profit_factor": 1.013714919829487,
+        "net_r": 53.393512153852996,
+        "expectancy_r": 0.008457708245501822,
+        "max_drawdown_r": 123.31655348336469,
+        "avg_bars_held": 5.575637573261524
+      }
+    },
+    {
+      "symbol": "SOLUSDT",
+      "bars": 141088,
+      "opportunities_evaluated": 140887,
+      "admitted": 9192,
+      "resolved": 5982,
+      "stats": {
+        "trades": 5982,
+        "wins": "2400",
+        "win_rate": 0.4012036108324975,
+        "profit_factor": 1.0495579587900294,
+        "net_r": 180.61796696790915,
+        "expectancy_r": 0.030193575220312463,
+        "max_drawdown_r": 54.17989925297178,
+        "avg_bars_held": 5.763791374122367
+      }
+    },
+    {
+      "symbol": "XRPUSDT",
+      "bars": 141088,
+      "opportunities_evaluated": 140887,
+      "admitted": 8394,
+      "resolved": 5559,
+      "stats": {
+        "trades": 5559,
+        "wins": "2131",
+        "win_rate": 0.3833423277567908,
+        "profit_factor": 0.9716555742354831,
+        "net_r": -98.96408145337102,
+        "expectancy_r": -0.017802497113396477,
+        "max_drawdown_r": 202.0770528425236,
+        "avg_bars_held": 5.7312466270912035
+      }
+    },
+    {
+      "symbol": "DOGEUSDT",
+      "bars": 141088,
+      "opportunities_evaluated": 140887,
+      "admitted": 8503,
+      "resolved": 5696,
+      "stats": {
+        "trades": 5696,
+        "wins": "2193",
+        "win_rate": 0.3850070224719101,
+        "profit_factor": 0.9847711786736951,
+        "net_r": -54.37306285520862,
+        "expectancy_r": -0.009545832664186907,
+        "max_drawdown_r": 124.18065172941316,
+        "avg_bars_held": 5.470681179775281
+      }
+    },
+    {
+      "symbol": "SUIUSDT",
+      "bars": 117600,
+      "opportunities_evaluated": 117399,
+      "admitted": 7072,
+      "resolved": 4642,
+      "stats": {
+        "trades": 4642,
+        "wins": "1818",
+        "win_rate": 0.3916415338216286,
+        "profit_factor": 1.005185978488739,
+        "net_r": 14.926801738725601,
+        "expectancy_r": 0.0032155971001132273,
+        "max_drawdown_r": 92.83162247025753,
+        "avg_bars_held": 5.803317535545023
+      }
+    }
+  ],
+  "historical_market_context": {
+    "bid_ask": "unavailable_from_ohlcv",
+    "order_book": "unavailable_from_ohlcv",
+    "latency": "unavailable_from_ohlcv",
+    "funding": "not_invented; use separate sensitivity test"
+  },
+  "parity_note": "Replay uses the same V9.3.1 admission functions and shadow outcome convention but cannot reproduce live bid/ask/order-book/funding telemetry from OHLCV alone."
+}
