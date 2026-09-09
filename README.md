@@ -1,142 +1,205 @@
 <div align="center">
 
-# ⚡ WEATHER-ENSEMBLE QUANT V2
-### 🌪️ Autonomous 31-Model Quantitative Consensus & Institutional Golden Pocket Execution
+# ⚡ WEATHER-ENSEMBLE QUANT V2 & CANDIDATE V9.3.1 SHADOW LAYER
+### 🌪️ Autonomous Quantitative Consensus, 0.618 Fib Execution & Live Forward Telemetry Citadel
 
 ```
-╔══════════════════════════════════════════════════════════════════════════════════════════════════╗
-║  📊 31 QUANT MODELS  ║  🏛️ 9 PILLARS  ║  📐 0.618 FIB POCKET  ║  🛡️ 6-TIER RISK  ║  📱 TELEGRAM C2 ║
-╚══════════════════════════════════════════════════════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║  📊 31 QUANT MODELS  ║  🏛️ 9 PILLARS  ║  📐 0.618 FIB POCKET  ║  🛡️ 6-TIER RISK  ║  📡 V9.3.1 SHADOW DAEMON  ║
+╚══════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
 ```
 
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Exchange](https://img.shields.io/badge/Exchange-Binance_Futures-F0B90B?style=for-the-badge&logo=binance&logoColor=black)](https://binance.com)
-[![Models](https://img.shields.io/badge/Models-31_Quant_Matrix-7928CA?style=for-the-badge)](#-the-31-model-ensemble-matrix)
-[![Pillars](https://img.shields.io/badge/Pillars-9_Independent-00F2FE?style=for-the-badge)](#-the-9-independent-pillars)
-[![Win Rate](https://img.shields.io/badge/Consistency-25%2F25_Green_Months-2EA44F?style=for-the-badge)](#-full-2-year-730-day-backtest-performance)
+[![Candidate V9.3.1](https://img.shields.io/badge/Shadow_Layer-V9.3.1_Observer-blueviolet?style=for-the-badge)](#-candidate-v931-shadow-telemetry--observer-layer)
+[![Execution Audit](https://img.shields.io/badge/Audit-3--Layer_Friction_Telemetry-00F2FE?style=for-the-badge)](#-3-layer-execution-audit--friction-telemetry)
+[![Laptop Ready](https://img.shields.io/badge/Deployment-1--Click_Laptop_Watchdogs-2EA44F?style=for-the-badge&logo=windows&logoColor=white)](#-1-click-laptop-deployment--watchdog-suite)
 [![Watchdog](https://img.shields.io/badge/Watchdog-24%2F7_Auto--Healing-FF5722?style=for-the-badge&logo=windows&logoColor=white)](#-247-windows-watchdog--daemon)
 [![Telegram C2](https://img.shields.io/badge/Mobile-1--Tap_Telegram_C2-26A5E4?style=for-the-badge&logo=telegram&logoColor=white)](#-mobile-command--control-telegram-c2)
 
 ---
 
-### 💡 *The Meteorological Quant Philosophy*
-> *Inspired by numerical ensemble weather forecasting: single predictive indicators fail, but when 90%+ of independent mathematical models converge on the exact same trajectory across multiple horizons, confidence approaches certainty.*
+### 💡 *The Dual-Engine Architectural Philosophy*
+> *Production capital requires absolute protection: live execution is governed by the battle-tested 31-model consensus and 6-layer risk citadel in `main.py`. Simultaneously, candidate strategies (V9.3.1) run in an isolated, read-only shadow observer daemon, ingesting live order flow, bid/ask depth, spread, and funding friction to validate statistical robustness before any live capital allocation.*
 
 </div>
 
 ---
 
-## 📑 Visual Infographic Index
+## 📑 Master Navigation Index
 
 ```
- ┌───────────────────────────┬───────────────────────────┬───────────────────────────┐
- │ 🗺️ System Pipeline        │ 🤖 31-Model Matrix        │ 🎯 4 Signal Channels      │
- ├───────────────────────────┼───────────────────────────┼───────────────────────────┤
- │ 🌊 Position Lifecycle     │ 🛡️ 6-Tier Risk Shield     │ 🪙 11-Asset Universe      │
- ├───────────────────────────┼───────────────────────────┼───────────────────────────┤
- │ 📊 Backtest Scorecard     │ 📱 Telegram Mobile C2     │ ♻️ 24/7 Windows Watchdog  │
- └───────────────────────────┴───────────────────────────┴───────────────────────────┘
+ ┌───────────────────────────────────────┬───────────────────────────────────────┬───────────────────────────────────────┐
+ │ 🗺️ Master Dual-Engine Architecture    │ 📡 V9.3.1 Shadow Observer Daemon      │ 🔬 3-Layer Execution Audit Gate       │
+ ├───────────────────────────────────────┼───────────────────────────────────────┼───────────────────────────────────────┤
+ │ 💻 1-Click Laptop & Watchdog Suite    │ 🤖 31-Model Quantitative Matrix       │ 🎯 4 Signal Confluence Channels       │
+ ├───────────────────────────────────────┼───────────────────────────────────────┼───────────────────────────────────────┤
+ │ 🌊 Option B Position Lifecycle        │ 🛡️ 6-Layer Institutional Citadel      │ 🪙 11-Asset Alpha Universe            │
+ ├───────────────────────────────────────┼───────────────────────────────────────┼───────────────────────────────────────┤
+ │ 📊 2-Year Full Backtest Scorecard     │ 📱 Telegram Mobile C2                 │ 🚀 Comprehensive CLI & Quickstart     │
+ └───────────────────────────────────────┴───────────────────────────────────────┴───────────────────────────────────────┘
 ```
 
 ---
 
-## 🗺️ Master Architecture & Signal Pipeline
+## 🗺️ Master Dual-Engine Architecture
 
 ```mermaid
 flowchart TD
-    classDef ingest fill:#1E293B,stroke:#38BDF8,stroke-width:2px,color:#F8FAFC;
-    classDef matrix fill:#312E81,stroke:#818CF8,stroke-width:2px,color:#F8FAFC;
-    classDef route fill:#064E3B,stroke:#34D399,stroke-width:2px,color:#F8FAFC;
-    classDef gates fill:#7F1D1D,stroke:#F87171,stroke-width:2px,color:#F8FAFC;
-    classDef exec fill:#78350F,stroke:#FBBF24,stroke-width:2px,color:#F8FAFC;
+    classDef live fill:#1E293B,stroke:#38BDF8,stroke-width:2px,color:#F8FAFC;
+    classDef shadow fill:#312E81,stroke:#A78BFA,stroke-width:2px,color:#F8FAFC;
+    classDef gate fill:#7F1D1D,stroke:#F87171,stroke-width:2px,color:#F8FAFC;
+    classDef exec fill:#064E3B,stroke:#34D399,stroke-width:2px,color:#F8FAFC;
+    classDef telemetry fill:#78350F,stroke:#FBBF24,stroke-width:2px,color:#F8FAFC;
 
-    subgraph INGEST["1️⃣ REAL-TIME DATA INGESTION ENGINE (15M Execution Bars)"]
-        D1["🪙 11 Alpha Universe (BTC · ETH · SOL · LINK · AVAX · XRP · ADA · APT · XAU · XAG · PAXG)"]
-        D2["⚡ Global API Cache & Rate-Limit Shield (/fapi/v1/premiumIndex + BTC 15M)"]
-        D3["📚 L2 Order Book Depth Imbalance (Top-20 Bids vs Asks)"]
+    subgraph BINANCE["🌐 LIVE BINANCE FUTURES API"]
+        K15["15M Closed Candlesticks (OHLCV)"]
+        BOOK["L2 Top-20 Order Book (bookTicker)"]
+        FUND["Premium Index & Funding Rate"]
     end
-    class INGEST,D1,D2,D3 ingest;
 
-    subgraph MATRIX["2️⃣ 31-MODEL QUANTITATIVE MATRIX (9 Independent Pillars)"]
-        direction LR
-        P1["⚡ Momentum (4)"]
-        P2["🔄 Mean Rev (4)"]
-        P3["📊 Cross-Asset (3)"]
-        P4["🌊 Volatility (3)"]
-        P5["🏛️ Micro L2 (3)"]
-        P6["🧠 ML Models (4)"]
-        P7["📈 Time Series (3)"]
-        P8["🎯 Multi-Factor (4)"]
-        P9["🕒 Session (3)"]
+    subgraph ENGINE_LIVE["⚡ PRODUCTION ENGINE (main.py) — PID AUTHORITATIVE"]
+        direction TB
+        M31["🤖 31-Model Ensemble (9 Pillars)"]
+        CH4["🎯 4 Confluence Channels (0.618 Fib, Divergence, Potato, Consensus)"]
+        CIT6["🛡️ 6-Layer Risk Citadel (4H Macro, BTC Dump, Depth, Drawdown)"]
+        EXEC_LIVE["🟢 Live Limit Maker / Option B Trailing Execution"]
+        M31 --> CH4 --> CIT6 --> EXEC_LIVE
     end
-    class MATRIX,P1,P2,P3,P4,P5,P6,P7,P8,P9 matrix;
+    class ENGINE_LIVE,M31,CH4,CIT6,EXEC_LIVE live;
 
-    subgraph ROUTING["3️⃣ MULTI-CHANNEL CONFLUENCE & TRIGGER ENGINE"]
-        CH0["📐 CH 0: Fibonacci Golden Pocket (0.500 - 0.618 Maker)"]
-        CH1["⚡ CH 1: 31-Model Consensus (≥ 30/31 & ≥ 7/9 Pillars)"]
-        CH2["🎯 CH 2: Dual RSI + CCI Divergence Sniper (≥ 5.0 pt Delta)"]
-        CH3["🥔 CH 3: Potato S&R 9-Hour Liquidity Sweep (ICT Turtle Soup)"]
+    subgraph ENGINE_SHADOW["📡 CANDIDATE V9.3.1 SHADOW OBSERVER (v9_3_1_shadow_daemon.py)"]
+        direction TB
+        S_SCAN["🔍 15s Continuous Universe Scan (Tier 1 & Tier 2)"]
+        S_POLICY["📐 V9.3.1 Refined Policy (4 Active Engines · Gated Regimes)"]
+        S_AUDIT["🔬 3-Layer Friction Audit (Spread, Depth, Latency, Slippage)"]
+        S_TRACK["📝 Forward Trade Simulator & Outcome Ledger"]
+        S_SCAN --> S_POLICY --> S_AUDIT --> S_TRACK
     end
-    class ROUTING,CH0,CH1,CH2,CH3 route;
+    class ENGINE_SHADOW,S_SCAN,S_POLICY,S_AUDIT,S_TRACK shadow;
 
-    subgraph GATES["4️⃣ 6-LAYER INSTITUTIONAL RISK DEFENSE CITADEL"]
-        G1["🏛️ 4H SMC Macro & MSS Direction"] --> G2["📚 L2 Depth Imbalance (≥ 1.05x)"]
-        G2 --> G3["👑 BTC Macro Health Dump Guard (0.50%)"]
-        G3 --> G4["📊 ADX Anti-Chop Filter (ADX ≥ 22.0)"]
-        G4 --> G5["🔒 1-Position-Per-Symbol Guard (Max 5)"]
-        G5 --> G6["🛡️ Autonomous 6% Drawdown Circuit Breaker"]
+    subgraph STORAGE["💾 PERSISTENCE & AUDIT SCORECARD"]
+        DATA_SHADOW["data/shadow_v9_3_1/ (opportunities.jsonl · outcomes.jsonl)"]
+        CLI_AUDIT["📊 audit_v9_3_1_shadow_telemetry.py (10-Point Transition Scorecard)"]
     end
-    class GATES,G1,G2,G3,G4,G5,G6 gates;
+    class STORAGE,DATA_SHADOW,CLI_AUDIT telemetry;
 
-    subgraph EXEC["5️⃣ OPTION B HYBRID LIFECYCLE & EXECUTION"]
-        E1["🟡 Limit Maker Entry @ 0.618 Pocket (50x Leverage / 3% Margin)"]
-        E2["🎯 50% Scale-Out @ TP1 (1.5x ATR / Swing Peak)"]
-        E3["🔒 Stop Loss Auto-Moved to Breakeven (+0.05% Fee Cover)"]
-        E4["🌊 Dynamic 1.2x ATR Trailing Runner (TP2 Maximum Run)"]
-        E1 --> E2 --> E3 --> E4
-    end
-    class EXEC,E1,E2,E3,E4 exec;
-
-    INGEST ==> MATRIX
-    MATRIX ==> ROUTING
-    ROUTING ==> GATES
-    GATES ==> EXEC
+    BINANCE ==> ENGINE_LIVE
+    BINANCE ==> ENGINE_SHADOW
+    ENGINE_SHADOW ==> STORAGE
 ```
 
 ---
 
-## 🎯 The 4 Signal Channels
+## 📡 Candidate V9.3.1 Shadow Telemetry & Observer Layer
+
+The repository hosts the **V9.3.1 Candidate Strategy**, an institutional 15-minute quantitative model operating in **strict observer mode** alongside the live production bot.
+
+### Key Tenets:
+1. **Zero Execution Risk**: Read-only consumption of public Binance Futures data (`/fapi/v1/klines`, `/fapi/v1/ticker/bookTicker`, `/fapi/v1/premiumIndex`). Zero private keys or trading credentials required for the shadow observer.
+2. **Production Authoritative Isolation**: `main.py` remains 100% authoritative over live account balance, margin, and order execution.
+3. **Realistic Market Friction Recording**: Ingests real-time top-of-book bid/ask spreads, order-book depth imbalance, funding drag, and API roundtrip latency at the exact millisecond of signal generation.
+
+### 📐 V9.3.1 Refined Policy Matrix
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ 0️⃣ 📐 OBJECTIVE FIBONACCI GOLDEN POCKET (Institutional Anchor)                                         │
-│    • Mathematical 4-bar fractal swing pivot high/low detection                                         │
-│    • Limit Maker entry within the 0.500 – 0.618 Golden Pocket retracement zone                         │
-│    • Structural Invalidation SL placed at 0.786 retracement + 0.5x ATR buffer                          │
-│    • Minimum Structural Risk-to-Reward Gate: R:R ≥ 1.80x                                               │
+│ 🎯 4 ACTIVE HIGH-ALPHA SETUP ENGINES                                                                   │
+├──────────────────────────┬──────────────┬──────────────────────────────────────────────────────────────┤
+│ Engine                   │ Target R:R   │ Strategic Function                                           │
+├──────────────────────────┼──────────────┼──────────────────────────────────────────────────────────────┤
+│ 🚀 TREND_CONTINUATION    │ 2.50x ATR    │ Primary alpha driver; captures sustained directional trend   │
+│ 💥 BB_ATR_EXPANSION      │ 2.00x ATR    │ Secondary momentum breakout from contracted volatility bands │
+│ 🔄 MSS_SHIFT             │ 1.50x ATR    │ Market Structure Shift; liquidity anchor and trend turn      │
+│ 🎯 BREAKOUT_RETEST       │ 1.80x ATR    │ High-precision retest of reclaimed price levels              │
+├──────────────────────────┴──────────────┴──────────────────────────────────────────────────────────────┤
+│ 🚫 6 PRUNED / DISABLED ENGINES (Eliminated based on empirical leave-one-out testing drag)             │
+│   • VWAP_TREND (Pruned: -2.17 R drag)              • PULLBACK_CONTINUATION (Pruned: Persistent fee drag)│
+│   • LIQUIDITY_SWEEP (Pruned: Whipsaw reclaims)     • EXHAUSTION_REVERSAL (Pruned: High knife-catch rate)│
+│   • VWAP_REVERSION (Pruned)                        • FIB_OTE (Pruned: Redundant with primary anchors)   │
 ├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ 1️⃣ ⚡ 31-MODEL QUANT CONSENSUS (Trend Acceleration)                                                    │
-│    • Requires ≥ 30 / 31 active model consensus (96.8% mathematical agreement)                          │
-│    • Requires ≥ 7 / 9 independent pillar confirmation (eliminates cross-model correlation bias)        │
-│    • Validates Volume Force Expansion (≥ 1.20x SMA20) & ATR Volatility Acceleration                   │
+│ 🛡️ REGIME GATING POLICY                                                                               │
+│   • ✅ ALLOWED: STRONG_TREND, HIGH_VOL, MILD_TREND                                                      │
+│   • ⛔ GATED (BLOCKED): RANGE, CHOP, BREAKDOWN (Blocked -100 R cumulative historical drag)             │
 ├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ 2️⃣ 🎯 DUAL RSI + CCI DIVERGENCE SNIPER (Macro Reversals)                                               │
-│    • Detects Swing Price Lower Low vs RSI Higher Low (≥ 5.0 pt Delta)                                  │
-│    • Confirms momentum curve hook with Commodity Channel Index (CCI) from oversold/overbought bands    │
-│    • Filtered against 4H SMC higher timeframe market structure bias                                    │
-├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ 3️⃣ 🥔 POTATO S&R 9-HOUR LIQUIDITY SWEEP (ICT Turtle Soup)                                             │
-│    • Tracks rolling 9-hour dynamic support floors and resistance ceilings                              │
-│    • Executes on aggressive liquidity sweep wick-reclaims inside the prevailing macro trend            │
-│    • Dynamic structural stop placed beyond the extreme liquidity grab wick                             │
+│ 🪙 MONITORED UNIVERSE TIERS                                                                           │
+│   • 🥇 TIER 1 (High Beta / High Alpha): SUIUSDT, SOLUSDT, XRPUSDT                                      │
+│   • 🥈 TIER 2 (Macro Liquidity Anchors): BTCUSDT, DOGEUSDT, ETHUSDT                                    │
 └────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
+## 🔬 3-Layer Execution Audit & Friction Telemetry
+
+Every opportunity evaluated by the V9.3.1 Shadow Daemon passes through a rigorous **3-Layer Execution Quality Audit**:
+
+```
+ ┌───────────────────────────────────────────────────────────────────────────────────────────────────────┐
+ │                                   3-LAYER EXECUTION QUALITY CITADEL                                   │
+ ├────────────────────────────────┬──────────────────────────────────┬──────────────────────────────────┤
+ │ 1️⃣ Layer 1: Structural Gate     │ 2️⃣ Layer 2: Execution Quality    │ 3️⃣ Layer 3: Empirical Friction   │
+ ├────────────────────────────────┼──────────────────────────────────┼──────────────────────────────────┤
+ │ • Spread Threshold (≤ 5.0 bps) │ • Real-Time Bid/Ask Spread Drag  │ • API Roundtrip Latency (ms)     │
+ │ • Top-20 Depth Imbalance (≥1.0)| • 8-Hour Funding Rate Drag       │ • Dynamic Slippage Simulation    │
+ │ • Volatility Ratio (ATR/Price) │ • Taker Fee Model (VIP0+BNB)     │ • Multi-Bar Forward Path Tracking│
+ └────────────────────────────────┴──────────────────────────────────┴──────────────────────────────────┘
+```
+
+### 🏆 10-Point Institutional Transition Gate (Path to V9.4 Production)
+
+Before Candidate V9.3.1 can be considered for live capital allocation, it must satisfy all 10 criteria tracked in real-time by [`audit_v9_3_1_shadow_telemetry.py`](file:///d:/Bot2/audit_v9_3_1_shadow_telemetry.py):
+
+| Gate # | Metric | Target Threshold | Description |
+|:---:|:---|:---:|:---|
+| **01** | Forward Trade Sample Size | $\ge 300\text{ Trades}$ | Sufficient statistical sample size under live forward conditions |
+| **02** | Forward Win Rate | $\ge 45.0\%$ | Sustainable base win rate with asymmetric R:R targets |
+| **03** | Forward Profit Factor | $\ge 1.25$ | Gross profits vs gross losses after realistic friction |
+| **04** | Net Realized Alpha | $\ge +30.0\text{ R}$ | Positive cumulative edge in units of standardized risk |
+| **05** | Max Peak-to-Valley Drawdown | $\le 15.0\text{ R}$ | Controlled forward downside volatility |
+| **06** | Average Signal Latency | $\le 800\text{ ms}$ | High-performance API execution roundtrip |
+| **07** | Average Execution Spread | $\le 3.5\text{ bps}$ | Monitored asset liquidity and low execution drag |
+| **08** | Setup Engine Consistency | All 4 Engines $\gt 0\text{ R}$ | No individual active setup dragging aggregate portfolio performance |
+| **09** | Asset Universe Safety | No asset $\lt -5.0\text{ R}$ | Robust cross-asset diversification without idiosyncratic failure |
+| **10** | Loss Streak Tolerance | $\le 8\text{ Consecutive}$ | Statistical resilience against cluster drawdowns |
+
+---
+
+## 💻 1-Click Laptop Deployment & Watchdog Suite
+
+For traders running the bot on portable laptops, Windows mini-PCs, or VPS environments, the repository provides zero-configuration batch tools that **auto-detect Python**, **auto-install dependencies**, and **prevent Windows sleep**:
+
+```
+ ┌───────────────────────────────┬───────────────────────────────────────────────────────────────────────┐
+ │ Tool Script                   │ Purpose & Capabilities                                                │
+ ├───────────────────────────────┼───────────────────────────────────────────────────────────────────────┤
+ │ 🚀 run_laptop_shadow_daemon.bat│ 1-Click V9.3.1 Shadow Observer Watchdog. Prevents PC sleep, installs  │
+ │                               │ pandas/numpy/requests, circuit breaker on rapid crash (< 10s).         │
+ ├───────────────────────────────┼───────────────────────────────────────────────────────────────────────┤
+ │ ⚡ run_laptop_watchdog.bat     │ 1-Click Production Bot Watchdog. Runs main.py with self-healing,       │
+ │                               │ auto-recovery within 5 seconds, and AC power sleep suppression.       │
+ ├───────────────────────────────┼───────────────────────────────────────────────────────────────────────┤
+ │ 📊 audit_laptop_shadow.bat    │ 1-Click Terminal Audit Scorecard. Displays live evaluated count,      │
+ │                               │ open positions, win rate, profit factor, and transition gates.        │
+ ├───────────────────────────────┼───────────────────────────────────────────────────────────────────────┤
+ │ 🔄 update_laptop_bot.bat      │ 1-Click GitHub Updater (No Git / No IDE required). Safely syncs the   │
+ │                               │ latest code while strictly preserving your local .env and data/.      │
+ └───────────────────────────────┴───────────────────────────────────────────────────────────────────────┘
+```
+
+### Intelligent Auto-Detection Sequence
+All laptop scripts automatically search and resolve the Python runtime across:
+1. Local `.venv\Scripts\python.exe`
+2. System `PATH` (`python`)
+3. Python Launcher (`py -3`)
+4. Windows AppData installations (`%LOCALAPPDATA%\Programs\Python\Python3*`)
+5. System root installations (`C:\Python3*`)
+
+---
+
 ## 🤖 The 31-Model Ensemble Matrix
 
-Trades execute **only** when **≥ 30 / 31 models** agree and **≥ 7 / 9 independent pillars** confirm.
+In the live production engine (`main.py`), trades execute **only** when **≥ 30 / 31 models** agree and **≥ 7 / 9 independent pillars** confirm.
 
 ### 🏛️ The 9 Independent Pillars & Models
 
@@ -189,6 +252,35 @@ Trades execute **only** when **≥ 30 / 31 models** agree and **≥ 7 / 9 indepe
   ├── Q29: London / New York Session Overlap Flow
   ├── Q30: UTC Funding Interval Window Reversal
   └── Q31: Intraday Hourly Volume Liquidity Cycle
+```
+
+---
+
+## 🎯 The 4 Signal Channels
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ 0️⃣ 📐 OBJECTIVE FIBONACCI GOLDEN POCKET (Institutional Anchor)                                         │
+│    • Mathematical 4-bar fractal swing pivot high/low detection                                         │
+│    • Limit Maker entry within the 0.500 – 0.618 Golden Pocket retracement zone                         │
+│    • Structural Invalidation SL placed at 0.786 retracement + 0.5x ATR buffer                          │
+│    • Minimum Structural Risk-to-Reward Gate: R:R ≥ 1.80x                                               │
+├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ 1️⃣ ⚡ 31-MODEL QUANT CONSENSUS (Trend Acceleration)                                                    │
+│    • Requires ≥ 30 / 31 active model consensus (96.8% mathematical agreement)                          │
+│    • Requires ≥ 7 / 9 independent pillar confirmation (eliminates cross-model correlation bias)        │
+│    • Validates Volume Force Expansion (≥ 1.20x SMA20) & ATR Volatility Acceleration                   │
+├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ 2️⃣ 🎯 DUAL RSI + CCI DIVERGENCE SNIPER (Macro Reversals)                                               │
+│    • Detects Swing Price Lower Low vs RSI Higher Low (≥ 5.0 pt Delta)                                  │
+│    • Confirms momentum curve hook with Commodity Channel Index (CCI) from oversold/overbought bands    │
+│    • Filtered against 4H SMC higher timeframe market structure bias                                    │
+├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ 3️⃣ 🥔 POTATO S&R 9-HOUR LIQUIDITY SWEEP (ICT Turtle Soup)                                             │
+│    • Tracks rolling 9-hour dynamic support floors and resistance ceilings                              │
+│    • Executes on aggressive liquidity sweep wick-reclaims inside the prevailing macro trend            │
+│    • Dynamic structural stop placed beyond the extreme liquidity grab wick                             │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -265,9 +357,9 @@ sequenceDiagram
 │ │  🪙 BTCUSDT  │  🪙 ETHUSDT  │  🪙 SOLUSDT  │  🪙 LINKUSDT │  🪙 AVAXUSDT │  🪙 XRPUSDT    │  │
 │ │  Bitcoin     │  Ethereum    │  Solana      │  Chainlink   │  Avalanche   │  Ripple        │  │
 │ ├──────────────┴──────────────┴──────────────┴──────────────┴──────────────┴────────────────┤  │
-│ │  🪙 ADAUSDT  │  🪙 APTUSDT                                                                │  │
-│ │  Cardano     │  Aptos                                                                     │  │
-│ └──────────────┴────────────────────────────────────────────────────────────────────────────┘  │
+│ │  🪙 ADAUSDT  │  🪙 APTUSDT  │  🪙 DOGEUSDT │  🪙 SUIUSDT                                 │  │
+│ │  Cardano     │  Aptos       │  Dogecoin    │  Sui         │                               │  │
+│ └──────────────┴──────────────┴──────────────┴──────────────┴───────────────────────────────┘  │
 │ 🏛️ MACRO COMMODITIES & DEEP LIQUIDITY PRECIOUS METALS                                         │
 │ ┌───────────────────────────┬───────────────────────────┬───────────────────────────────────┐  │
 │ │  🥇 XAUUSDT               │  🥈 XAGUSDT               │  🪙 PAXGUSDT                      │  │
@@ -353,9 +445,9 @@ Control, monitor, and emergency-liquidate your live Binance Futures trading engi
 
 ## ♻️ 24/7 Windows Watchdog & Daemon
 
-The engine includes a production-hardened self-healing watchdog daemon ([`run_24_7_windows_watchdog.bat`](file:///d:/Bot2/run_24_7_windows_watchdog.bat)) that:
+The engine includes production-hardened self-healing watchdog daemons ([`run_24_7_windows_watchdog.bat`](file:///d:/Bot2/run_24_7_windows_watchdog.bat) and [`run_laptop_watchdog.bat`](file:///d:/Bot2/run_laptop_watchdog.bat)) that:
 - Prevents Windows PC sleep during trading hours.
-- Automatically reboots the bot within **3 seconds** if a network drop or crash occurs.
+- Automatically reboots the bot within **3 to 5 seconds** if a network drop or crash occurs.
 - Installs directly to the Windows Startup folder via [`scripts/create_startup_shortcut.ps1`](file:///d:/Bot2/scripts/create_startup_shortcut.ps1) or [`scripts/setup_windows_autostart.bat`](file:///d:/Bot2/scripts/setup_windows_autostart.bat).
 
 ```
@@ -381,31 +473,51 @@ The engine includes a production-hardened self-healing watchdog daemon ([`run_24
 
 ```
 d:\Bot2\
-├── main.py                           ⚡ Core 31-Model Trading Engine + Telegram C2 Daemon
-├── weather_ensemble_bot.py           🔄 Backward-Compatibility Alias for main.py
-├── smc_mss_strategy.py               📐 SMC Market Structure Shift Engine
-├── order_flow_engine.py              📊 L2 Order Book & Imbalance Flow Engine
-├── server.py                         🔌 REST API & Background Subprocess Controller
-├── scratch_daily_audit.py            🔍 Live Account & Risk Auditor Script
-├── core/                             💻 Core Library Modules & Terminal Dashboard
-│   ├── main.py                       ⚡ Core Engine Engine
-│   └── terminal_dashboard.py         💻 Rich TUI Terminal Dashboard
-├── scripts/
-│   ├── run_24_7_windows_watchdog.bat ♻️ Windows 24/7 Self-Healing Watchdog
-│   ├── setup_windows_autostart.bat   🚀 Windows Startup Configurator
-│   └── create_startup_shortcut.ps1   🔗 Windows Startup Shortcut Utility
+├── main.py                              ⚡ Core 31-Model Trading Engine + Telegram C2 Daemon
+├── weather_ensemble_bot.py              🔄 Backward-Compatibility Alias for main.py
+├── smc_mss_strategy.py                  📐 SMC Market Structure Shift Engine
+├── order_flow_engine.py                 📊 L2 Order Book & Imbalance Flow Engine
+├── market_state_ws.py                   🌐 Real-time WebSocket Market Feed
+├── execution_reconciliation.py          🛡️ Live Balance & Order Reconciliation
+├── trading_safety.py                    🛑 Circuit Breaker & Safety Citadel
+│
+├── strategy_candidate_v9_3_1.py         🔬 V9.3.1 Refined Conservative 15M Strategy Candidate
+├── v9_3_1_shadow_engine.py              📡 V9.3.1 Shadow Forward Tracking Engine
+├── v9_3_1_shadow_daemon.py              🚀 V9.3.1 Shadow Observer Daemon (Public API / Read-Only)
+├── audit_v9_3_1_shadow_telemetry.py     📊 V9.3.1 Shadow Telemetry & 10-Point Gate Audit CLI
+│
+├── run_laptop_shadow_daemon.bat         💻 1-Click Laptop Shadow Daemon Watchdog
+├── run_laptop_watchdog.bat              💻 1-Click Laptop Production Bot Watchdog
+├── audit_laptop_shadow.bat              📊 1-Click Laptop Interactive Shadow Scorecard
+├── update_laptop_bot.bat                🔄 1-Click Laptop GitHub Updater (Zero Git / Zero IDE)
+├── update_from_github.py                🐍 Automated GitHub Sync & Conflict Safeguard
+│
+├── run_24_7_windows_watchdog.bat        ♻️ Dedicated Windows 24/7 Watchdog Daemon
+├── server.py                            🔌 REST API & Background Subprocess Controller
+├── desktop_terminal.py                  💻 Rich Graphical Desktop Terminal
+├── terminal_dashboard.py                💻 Rich TUI Terminal Dashboard
+│
+├── data/
+│   └── shadow_v9_3_1/                   💾 V9.3.1 Persisted Telemetry (JSONL & JSON)
+│       ├── opportunities.jsonl          📝 All Evaluated Opportunities & Market Friction
+│       ├── outcomes.jsonl               📝 Resolved Shadow Trades with Slippage/Funding
+│       └── open_positions.json          ⏳ Active In-Flight Shadow Positions
+│
 ├── backtests/
-│   ├── backtest_1year_complete_engine.py    📊 Full 1-Year Historical Backtest Engine
-│   ├── backtest_unified_all_in_one.py       📊 Unified All-in-One Multi-Strategy Backtest
-│   ├── backtest_current_plus_5ema.py        📊 Current + 5EMA Alpha Backtest
-│   └── historical_data_cache/               💾 Binance Futures 15M OHLCV Dataset
-├── polymarket/                       🪙 Polymarket Quantitative Arbitrage Suite
-└── docs/                             📄 Strategy Guides & Architecture Documentation
+│   ├── run_v9_3_1_shadow_observer_backtest.py 📊 V9.3.1 Historical Shadow Replay Engine
+│   ├── run_v9_3_institutional_backtest.py     📊 V9.3 4-Year Institutional Matrix
+│   ├── backtest_1year_complete_engine.py      📊 Full 1-Year Historical Backtest Engine
+│   ├── v9_3_1_integration_report.json         📄 Fresh 4-Year Institutional Audit Data
+│   └── historical_data_cache/                 💾 Binance Futures 15M OHLCV Dataset
+│
+├── scripts/                             🛠️ Deployment, Watchdogs, and Automation Scripts
+├── tests/                               🧪 Comprehensive Pytest Test Suite
+└── docs/                                📄 Strategy Notes & Architectural Specifications
 ```
 
 ---
 
-## 🚀 Quickstart & Commands
+## 🚀 Quickstart & Operational Cheatsheet
 
 ### 1. Configure Environment (`.env`)
 
@@ -417,10 +529,42 @@ TELEGRAM_CHAT_ID=your_telegram_chat_id
 TELEGRAM_NOTIFICATIONS=true
 ```
 
-### 2. Launch 24/7 Autonomous Live Trading Watchdog
+### 2. Launch V9.3.1 Shadow Observer Daemon
+
+*Run continuously with 15s polling and output mirroring:*
 
 ```powershell
-.\run_24_7_windows_watchdog.bat
+.venv\Scripts\python.exe -u v9_3_1_shadow_daemon.py --poll-interval 15 --log-file v9_3_1_shadow_daemon.log
+```
+
+*Or run via the 1-Click Laptop Watchdog:*
+
+```powershell
+.\run_laptop_shadow_daemon.bat
+```
+
+*Inspect telemetry status or perform a single scan:*
+
+```powershell
+# Display current shadow telemetry status:
+.venv\Scripts\python.exe v9_3_1_shadow_daemon.py --status
+
+# Execute a single universe evaluation cycle:
+.venv\Scripts\python.exe v9_3_1_shadow_daemon.py --once
+```
+
+### 3. Run Live V9.3.1 Telemetry & Transition Gate Audit
+
+```powershell
+.venv\Scripts\python.exe audit_v9_3_1_shadow_telemetry.py
+```
+
+*Or double-click:* `audit_laptop_shadow.bat`
+
+### 4. Launch 24/7 Autonomous Live Trading Bot
+
+```powershell
+.\run_laptop_watchdog.bat
 ```
 
 *Or launch manually via Python:*
@@ -429,16 +573,16 @@ TELEGRAM_NOTIFICATIONS=true
 .venv\Scripts\python.exe -u main.py --trade-live --sizing-mode margin --margin-pct 0.03 --leverage 50 --threshold 30 --timeframe 15m --max-positions 5
 ```
 
-### 3. Run Live Account & Risk Audit
+### 5. Update Repository from GitHub (1-Click)
 
 ```powershell
-.venv\Scripts\python.exe scratch_daily_audit.py
+.\update_laptop_bot.bat
 ```
 
-### 4. Run Strategy Backtest Engine
+### 6. Run Test Suite
 
 ```powershell
-.venv\Scripts\python.exe backtests/backtest_unified_all_in_one.py
+.venv\Scripts\python.exe -m pytest tests/ -v
 ```
 
 ---
@@ -447,10 +591,10 @@ TELEGRAM_NOTIFICATIONS=true
 
 ### ⚠️ Risk Disclaimer
 
-*Cryptocurrency futures trading involves substantial risk of loss and is not suitable for every investor. The high degree of leverage can work against you as well as for you. Past backtested performance is not indicative of future results.*
+*Cryptocurrency futures trading involves substantial risk of loss and is not suitable for every investor. The high degree of leverage can work against you as well as for you. Candidate V9.3.1 is strictly an observer telemetry layer with zero execution permissions until the 10-point institutional transition gate is fully satisfied. Past backtested performance is not indicative of future results.*
 
 ---
 
-**Weather-Ensemble V2** · 31 Quantitative Models · 9 Independent Pillars · 0.618 Golden Pocket · 24/7 Autonomous Execution
+**Weather-Ensemble V2 & Candidate V9.3.1** · 31 Quantitative Models · 9 Pillars · Live Forward Telemetry Citadel · 24/7 Autonomous Execution
 
 </div>
