@@ -15,9 +15,7 @@ Production Hardened Version:
 import os
 import sys
 import time
-import math
 import json
-import random
 import hmac
 import hashlib
 import urllib.parse
@@ -33,9 +31,7 @@ from strategy_consensus_v3 import evaluate_hardened_31_models
 from trading_safety import (
     TradingStateUnavailable,
     InvalidOrderRequest,
-    RetryDecision,
     classify_binance_error,
-    retry_call,
     require_authoritative_positions,
     choose_authoritative_stop,
     exactly_one_protective_stop,
@@ -44,7 +40,6 @@ from trading_safety import (
     protective_stop_key,
     order_response_is_success,
     find_order_by_client_id,
-    response_is_ambiguous,
     should_reconcile_before_retry,
 )
 from execution_reconciliation import (
@@ -675,7 +670,9 @@ class AtlasDarwinianOptimizer:
     - Dynamically scales capital allocation (0.80x to 1.50x) based on real trading outcomes.
     - Automatically persists weights to data/state/atlas_darwinian_weights.json.
     """
-    def __init__(self, channels=['FIBONACCI', 'MSS_SHIFT', '5MA_CONSENSUS', 'POTATO_SR', 'DIVERGENCE']):
+    def __init__(self, channels=None):
+        if channels is None:
+            channels = ['FIBONACCI', 'MSS_SHIFT', '5MA_CONSENSUS', 'POTATO_SR', 'DIVERGENCE']
         self.state_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'state', 'atlas_darwinian_weights.json')
         os.makedirs(os.path.dirname(self.state_file), exist_ok=True)
         self.channels = channels
@@ -2035,11 +2032,6 @@ def detect_micro_bias(symbol, df=None):
         # 2. Check 15m klines DataFrame (either passed or cached)
         if df is not None and len(df) >= 20:
             c = df['close'].values
-            o = df['open'].values
-            h = df['high'].values
-            l = df['low'].values
-            v = df['volume'].values
-            
             ema9 = pd.Series(c).ewm(span=9, adjust=False).mean().iloc[-1]
             ema20 = pd.Series(c).ewm(span=20, adjust=False).mean().iloc[-1]
             curr_c = c[-1]
@@ -2458,9 +2450,6 @@ def place_binance_futures_tp_sl(symbol, side, last_price, atr, leverage=75, tota
     sl_res = None
     tp1_order_id_placed = None   # track so we can cancel if SL fails
     tp2_order_id_placed = None
-
-    exchange = get_ccxt_exchange()
-    ccxt_sym = to_ccxt_symbol(symbol)
 
     # --- Leg 1: TP1 (Binance Algo Order API — eliminates -1106 and -4120 errors) ---
     try:
@@ -2982,7 +2971,6 @@ def place_binance_futures_market_order(symbol="XRPUSDT", side="BUY", trade_usdt=
             except Exception:
                 return None
 
-    wallet_balance = get_binance_futures_usdt_balance('wallet')
     equity_balance = get_binance_futures_usdt_balance('equity')
     avail_balance = get_binance_futures_usdt_balance('available')
     
