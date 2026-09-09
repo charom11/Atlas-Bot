@@ -13,6 +13,13 @@ import shutil
 import zipfile
 import urllib.request
 
+# Ensure UTF-8 output on Windows terminals without crashing on cp1252
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+
 REPO_ZIP_URL = "https://github.com/charom11/Atlas-Bot/archive/refs/heads/strategy/candidate-v9-3-1.zip"
 FALLBACK_ZIP_URL = "https://github.com/charom11/Atlas-Bot/archive/refs/heads/main.zip"
 

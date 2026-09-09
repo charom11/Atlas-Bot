@@ -184,6 +184,9 @@ For traders running the bot on portable laptops, Windows mini-PCs, or VPS enviro
  ├───────────────────────────────┼───────────────────────────────────────────────────────────────────────┤
  │ 🔄 update_laptop_bot.bat      │ 1-Click GitHub Updater (No Git / No IDE required). Safely syncs the   │
  │                               │ latest code while strictly preserving your local .env and data/.      │
+ ├───────────────────────────────┼───────────────────────────────────────────────────────────────────────┤
+ │ ⬆️ sync_laptop_to_github.bat  │ 1-Click Laptop ➔ GitHub Sync. Safely stages, commits, and pushes     │
+ │                               │ laptop modifications while strictly safeguarding .env and data/.      │
  └───────────────────────────────┴───────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -491,6 +494,8 @@ d:\Bot2\
 ├── audit_laptop_shadow.bat              📊 1-Click Laptop Interactive Shadow Scorecard
 ├── update_laptop_bot.bat                🔄 1-Click Laptop GitHub Updater (Zero Git / Zero IDE)
 ├── update_from_github.py                🐍 Automated GitHub Sync & Conflict Safeguard
+├── sync_laptop_to_github.bat            ⬆️ 1-Click Laptop ➔ GitHub Sync & Push
+├── sync_to_github.py                    🐍 Automated Laptop to GitHub Push Safeguard
 │
 ├── run_24_7_windows_watchdog.bat        ♻️ Dedicated Windows 24/7 Watchdog Daemon
 ├── server.py                            🔌 REST API & Background Subprocess Controller
@@ -579,7 +584,13 @@ TELEGRAM_NOTIFICATIONS=true
 .\update_laptop_bot.bat
 ```
 
-### 6. Run Test Suite
+### 6. Sync Changes from Laptop to GitHub (1-Click)
+
+```powershell
+.\sync_laptop_to_github.bat
+```
+
+### 7. Run Test Suite
 
 ```powershell
 .venv\Scripts\python.exe -m pytest tests/ -v
