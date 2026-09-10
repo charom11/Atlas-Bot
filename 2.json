@@ -1,0 +1,110 @@
+{
+  "provenance": {
+    "candidate": "V9.4",
+    "parent_candidate": "V9.3.1",
+    "live_orders_permitted": false,
+    "main_py_authoritative": true,
+    "active_setups": [
+      "BB_ATR_EXPANSION",
+      "BREAKOUT_RETEST",
+      "MSS_SHIFT",
+      "TREND_CONTINUATION"
+    ],
+    "gated_regimes": [
+      "BREAKDOWN",
+      "CHOP",
+      "RANGE"
+    ],
+    "volatility_band_enabled": true,
+    "atr_pct_band": [
+      0.0015,
+      0.06
+    ],
+    "mild_trend_min_score": 6,
+    "breakeven_trigger_r": 1.0,
+    "max_operating_leverage": 5.0,
+    "leverage_75x_rejected": true,
+    "regime_risk_multipliers": {
+      "STRONG_TREND": 1.0,
+      "HIGH_VOL": 0.6,
+      "MILD_TREND": 0.75
+    }
+  },
+  "run": {
+    "dataset_type": "4year",
+    "dataset_path": "data/ohlcv/BTCUSDT_15m_4year_2022-09-01.csv",
+    "rows": 141123,
+    "friction_r": 0.026,
+    "max_hold_bars": 32,
+    "config": {
+      "allow_tier_2": true,
+      "allow_tier_3": false,
+      "allow_mild_trend": true,
+      "min_score": 5,
+      "min_confirmations": 1,
+      "trend_stop_atr": 1.25,
+      "trend_target_atr": 2.5,
+      "base_stop_atr": 1.25,
+      "base_target_atr": 2.0,
+      "shadow_mode": true,
+      "max_operating_leverage": 5.0,
+      "max_risk_per_trade_pct": 0.0035,
+      "max_portfolio_risk_pct": 0.015,
+      "enable_volatility_band": true,
+      "atr_pct_floor": 0.0015,
+      "atr_pct_ceiling": 0.06,
+      "mild_trend_min_score": 6,
+      "enable_regime_risk_scaling": true,
+      "enable_breakeven_trail": true,
+      "breakeven_trigger_r": 1.0
+    },
+    "started_utc": "2026-09-10T00:50:47.531482+00:00",
+    "finished_utc": "2026-09-10T00:51:51.830771+00:00",
+    "elapsed_sec": 64.299
+  },
+  "walk_forward": {
+    "periods": [
+      {
+        "period": "Y2022_H2",
+        "n": 417,
+        "total_r": -16.3305,
+        "win_rate": 0.254
+      },
+      {
+        "period": "Y2023",
+        "n": 1581,
+        "total_r": 15.8884,
+        "win_rate": 0.278
+      },
+      {
+        "period": "Y2024",
+        "n": 1890,
+        "total_r": 39.7551,
+        "win_rate": 0.281
+      },
+      {
+        "period": "Y2025",
+        "n": 1591,
+        "total_r": -86.6234,
+        "win_rate": 0.251
+      },
+      {
+        "period": "Y2026",
+        "n": 1128,
+        "total_r": -78.6466,
+        "win_rate": 0.246
+      }
+    ],
+    "portfolio": {
+      "total_trades": 6607,
+      "total_r": -125.957,
+      "avg_r_per_trade": -0.0191,
+      "n_periods": 5
+    }
+  },
+  "whole_frame": {
+    "total_trades": 6657,
+    "total_r": -104.6715
+  },
+  "live_orders_permitted": false
+}
