@@ -1,0 +1,34 @@
+{
+  "run": {
+    "bars_per_symbol": 140160,
+    "symbols": 11,
+    "years": 4,
+    "trades_completed": 300
+  },
+  "ORIGINAL_v9_fills": {
+    "trades": 300,
+    "net_R": -114.064,
+    "expectancy_R": -0.3802,
+    "win_rate_pct": 29.7,
+    "profit_factor": 0.439
+  },
+  "HARDENED_realistic_fills": {
+    "trades": 300,
+    "net_R": -123.098,
+    "expectancy_R": -0.4103,
+    "win_rate_pct": 29.7,
+    "profit_factor": 0.42
+  },
+  "delta": {
+    "net_R": -9.034,
+    "expectancy_R": -0.0301,
+    "pct_expectancy_erosion": -7.9
+  },
+  "fill_diagnostics": {
+    "gap_stop_fills": 3,
+    "slip_stop_fills": 247,
+    "ambiguous_bars": 17,
+    "total": 380
+  },
+  "diagnostics_note": "gap_stop_fills = stops that opened BEYOND the level (V9 fills these at the exact stop -> optimistic). slip_stop_fills = intrabar stop-market hits charged realistic slippage. ambiguous_bars = bars where BOTH stop and target were inside [low,high] (path unknown; outcome is an assumption)."
+}
