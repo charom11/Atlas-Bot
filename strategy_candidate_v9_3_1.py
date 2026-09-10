@@ -240,8 +240,9 @@ def backtest_frame(
     config: V931Config = V931Config(),
     friction_r: float = 0.026,
     max_hold_bars: int = 32,
+    stop_slip_atr: float = 0.0,
 ) -> list[Trade]:
-    """Next-bar execution simulation enforcing Candidate V9.3.1 refined admission rules."""
+    """Next-bar execution simulation enforcing Candidate V9.3.1 refined admission rules with hardened fills."""
     if df.empty or len(df) <= 201:
         return []
 
@@ -283,11 +284,13 @@ def backtest_frame(
         end_bar = min(n, entry_idx + max_hold_bars)
         for j in range(entry_idx, end_bar):
             held += 1
-            l_val, h_val = lows[j], highs[j]
+            o_val, l_val, h_val = opens[j], lows[j], highs[j]
             stop_hit = (l_val <= stop) if side == LONG else (h_val >= stop)
             target_hit = (h_val >= target) if side == LONG else (l_val <= target)
             if stop_hit:
-                exit_px = stop
+                # F2: Opening gap beyond stop fills at the open, not the stop trigger
+                gapped = (o_val <= stop) if side == LONG else (o_val >= stop)
+                exit_px = o_val if gapped else stop - side * stop_slip_atr * atr
                 break
             if target_hit:
                 exit_px = target

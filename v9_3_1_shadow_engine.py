@@ -480,9 +480,11 @@ class V931ShadowEngine:
 
         # Layer 3: Determine outcome & execution fills
         if stop_hit:
-            exit_theoretical = pos.stop_price
+            open_px = float(row["open"]) if "open" in row else pos.entry_price
+            gapped = (open_px <= pos.stop_price) if pos.side == LONG else (open_px >= pos.stop_price)
+            exit_theoretical = open_px if gapped else pos.stop_price
             outcome_type = "STOP"
-            exit_realistic = min(pos.stop_price, exit_bid) if pos.side == LONG and exit_bid > 0 else (max(pos.stop_price, exit_ask) if exit_ask > 0 else pos.stop_price)
+            exit_realistic = min(exit_theoretical, exit_bid) if pos.side == LONG and exit_bid > 0 else (max(exit_theoretical, exit_ask) if exit_ask > 0 else exit_theoretical)
         elif target_hit:
             exit_theoretical = pos.target_price
             outcome_type = "TARGET"

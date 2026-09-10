@@ -133,7 +133,9 @@ def replay_symbol(
 
             if stop_hit or target_hit or timeout_hit:
                 if stop_hit:
-                    exit_px = stop
+                    o_val = opens[i]
+                    gapped = (o_val <= stop) if side == LONG else (o_val >= stop)
+                    exit_px = o_val if gapped else stop
                 elif target_hit:
                     exit_px = target
                 else:
