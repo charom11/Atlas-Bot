@@ -66,51 +66,79 @@ if sys.platform == "win32":
 # 📝 File-based Log Tee with Size Rotation (mirrors all stdout to bot_output.log)
 # --------------------------------------------------------------------------
 class _TeeLogger:
-    """BUG-9 Fix: Tees all writes to stream and log file with 10MB auto-rotation and 3 backups."""
+    """BUG-9 & Windows Hardening: Thread-safe log tee with self-healing rotation."""
     def __init__(self, stream, filepath, max_bytes=10*1024*1024, backup_count=3):
         self._stream = stream
         self._filepath = filepath
         self._max_bytes = max_bytes
         self._backup_count = backup_count
+        self._lock = threading.Lock()
         self._log = open(filepath, 'a', encoding='utf-8', buffering=1)
 
     def _rotate_if_needed(self):
         try:
-            if self._log.tell() >= self._max_bytes:
+            if not self._log.closed and self._log.tell() >= self._max_bytes:
                 self._log.close()
                 for i in range(self._backup_count - 1, 0, -1):
                     sfn = f"{self._filepath}.{i}"
                     dfn = f"{self._filepath}.{i+1}"
                     if os.path.exists(sfn):
                         if os.path.exists(dfn):
-                            os.remove(dfn)
-                        os.rename(sfn, dfn)
+                            try:
+                                os.remove(dfn)
+                            except Exception:
+                                pass
+                        try:
+                            os.rename(sfn, dfn)
+                        except Exception:
+                            pass
                 dfn = f"{self._filepath}.1"
                 if os.path.exists(dfn):
-                    os.remove(dfn)
+                    try:
+                        os.remove(dfn)
+                    except Exception:
+                        pass
                 if os.path.exists(self._filepath):
-                    os.rename(self._filepath, dfn)
-                self._log = open(self._filepath, 'a', encoding='utf-8', buffering=1)
+                    try:
+                        os.rename(self._filepath, dfn)
+                    except Exception:
+                        pass
         except Exception:
             pass
+        finally:
+            if self._log.closed:
+                try:
+                    self._log = open(self._filepath, 'a', encoding='utf-8', buffering=1)
+                except Exception:
+                    pass
 
     def write(self, data):
         self._stream.write(data)
-        try:
-            self._log.write(data)
-            self._rotate_if_needed()
-        except Exception:
-            pass
+        with self._lock:
+            try:
+                if self._log.closed:
+                    self._log = open(self._filepath, 'a', encoding='utf-8', buffering=1)
+                self._log.write(data)
+                self._rotate_if_needed()
+            except Exception:
+                pass
 
     def flush(self):
         self._stream.flush()
-        try:
-            self._log.flush()
-        except Exception:
-            pass
+        with self._lock:
+            try:
+                if not self._log.closed:
+                    self._log.flush()
+            except Exception:
+                pass
 
     def __getattr__(self, attr):
         return getattr(self._stream, attr)
+
+# --------------------------------------------------------------------------
+# 🔒 Thread-Safety Re-entrant Engine Lock (Guards Telegram C2 vs Main Loop)
+# --------------------------------------------------------------------------
+_ENGINE_LOCK = threading.RLock()
 
 try:
     _log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '')
@@ -408,6 +436,29 @@ class GlobalDataCache:
 GLOBAL_CACHE = GlobalDataCache()
 
 # --------------------------------------------------------------------------
+# 📜 Closed Position Channel Ledger (Fixes Darwinian Attribution Bug)
+# --------------------------------------------------------------------------
+_CLOSED_POSITION_CHANNELS = {}  # symbol -> (channel_name, closed_timestamp)
+_CHANNEL_HISTORY_TTL = 86400  # 24 hours
+
+def record_closed_position_channel(symbol: str, channel: str):
+    """Saves the channel of a closing position so realized PnL events attribute it accurately."""
+    now = time.time()
+    _CLOSED_POSITION_CHANNELS[symbol] = (channel, now)
+    # Prune records older than 24 hours
+    expired = [s for s, (_, ts) in list(_CLOSED_POSITION_CHANNELS.items()) if now - ts > _CHANNEL_HISTORY_TTL]
+    for s in expired:
+        _CLOSED_POSITION_CHANNELS.pop(s, None)
+
+def get_channel_for_symbol(symbol: str) -> str:
+    """Returns origin signal channel for symbol from active targets or recently closed ledger."""
+    if 'ACTIVE_POSITION_TARGETS' in globals() and symbol in ACTIVE_POSITION_TARGETS:
+        return ACTIVE_POSITION_TARGETS[symbol].get('channel', 'FIBONACCI')
+    if symbol in _CLOSED_POSITION_CHANNELS:
+        return _CLOSED_POSITION_CHANNELS[symbol][0]
+    return 'FIBONACCI'
+
+# --------------------------------------------------------------------------
 # Circuit Breaker & Risk Protection Manager
 # --------------------------------------------------------------------------
 class CircuitBreakerManager:
@@ -486,7 +537,7 @@ class CircuitBreakerManager:
                     # Update internal stats
                     self.trades_today += 1
                     self.realized_pnl_today += pnl
-                    target_ch = ACTIVE_POSITION_TARGETS.get(sym, {}).get('channel', 'FIBONACCI') if 'ACTIVE_POSITION_TARGETS' in globals() else 'FIBONACCI'
+                    target_ch = get_channel_for_symbol(sym)
                     if 'ATLAS_DARWINIAN' in globals():
                         ATLAS_DARWINIAN.record_trade_outcome(target_ch, pnl)
                     if pnl < -0.005:
@@ -640,8 +691,21 @@ class MilestoneLockManager:
         self.peak_balance = initial_capital
         self.milestones = [30.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 5000.0]
         self.locked_milestone = 0.0
+        self._initialized = False
 
     def update(self, current_balance):
+        if current_balance is None or current_balance <= 0:
+            return self.locked_milestone
+
+        # Cold-start baseline lock: prevent spamming alerts for pre-existing capital on boot
+        if not self._initialized:
+            self._initialized = True
+            self.peak_balance = max(self.initial_capital, current_balance)
+            for m in self.milestones:
+                if current_balance >= m:
+                    self.locked_milestone = m
+            return self.locked_milestone
+
         if current_balance > self.peak_balance:
             self.peak_balance = current_balance
             for m in self.milestones:
@@ -1238,19 +1302,44 @@ def check_portfolio_risk_capacity(balance, new_margin_usdt, max_portfolio_margin
 # Cached server time offset and exchange info to avoid redundant HTTP calls
 _SERVER_TIME_OFFSET = 0  # ms offset between local clock and Binance server
 _SERVER_TIME_SYNCED = False
+_LAST_SERVER_TIME_SYNC = 0
 
 _EXCHANGE_INFO_CACHE = {}  # symbol -> {'pricePrecision': int, 'quantityPrecision': int}
 _EXCHANGE_INFO_TS = 0
 
+_BINANCE_HTTP_SESSION = None
+
+def get_binance_http_session():
+    """Returns pooled HTTP session with keep-alive and connection pooling to avoid TLS overhead."""
+    global _BINANCE_HTTP_SESSION
+    if _BINANCE_HTTP_SESSION is None:
+        from urllib3.util.retry import Retry
+        from requests.adapters import HTTPAdapter
+
+        s = requests.Session()
+        retries = Retry(
+            total=3,
+            backoff_factor=0.3,
+            status_forcelist=[500, 502, 503, 504],
+            raise_on_status=False
+        )
+        adapter = HTTPAdapter(max_retries=retries, pool_connections=10, pool_maxsize=20)
+        s.mount('https://', adapter)
+        s.mount('http://', adapter)
+        _BINANCE_HTTP_SESSION = s
+    return _BINANCE_HTTP_SESSION
+
 def sync_server_time():
-    global _SERVER_TIME_OFFSET, _SERVER_TIME_SYNCED
+    global _SERVER_TIME_OFFSET, _SERVER_TIME_SYNCED, _LAST_SERVER_TIME_SYNC
     try:
-        t_res = requests.get('https://fapi.binance.com/fapi/v1/time', timeout=3)
+        session = get_binance_http_session()
+        t_res = session.get('https://fapi.binance.com/fapi/v1/time', timeout=3)
         if t_res.status_code == 200:
             server_ts = t_res.json()['serverTime']
             local_ts = int(time.time() * 1000)
             _SERVER_TIME_OFFSET = server_ts - local_ts
             _SERVER_TIME_SYNCED = True
+            _LAST_SERVER_TIME_SYNC = time.time()
     except Exception:
         # BUG-11 Fix: Keep previous offset on failure instead of zeroing
         # (zeroing causes -1021 Timestamp errors if local clock drifts)
@@ -1276,7 +1365,8 @@ def get_symbol_info(symbol):
     now = time.time()
     if now - _EXCHANGE_INFO_TS > 3600 or not _EXCHANGE_INFO_CACHE:
         try:
-            ex_info = requests.get("https://fapi.binance.com/fapi/v1/exchangeInfo", timeout=8).json()
+            session = get_binance_http_session()
+            ex_info = session.get("https://fapi.binance.com/fapi/v1/exchangeInfo", timeout=8).json()
             for s in ex_info.get('symbols', []):
                 sym_notional = 5.0
                 for f in s.get('filters', []):
@@ -1338,12 +1428,13 @@ def binance_futures_signed_request(method, endpoint, params=None, max_retries=3)
         url = f"https://fapi.binance.com{endpoint}?{query_string}&signature={signature}"
 
         try:
+            session = get_binance_http_session()
             if method.upper() == 'GET':
-                r = requests.get(url, headers=headers, timeout=5)
+                r = session.get(url, headers=headers, timeout=5)
             elif method.upper() == 'POST':
-                r = requests.post(url, headers=headers, timeout=5)
+                r = session.post(url, headers=headers, timeout=5)
             elif method.upper() == 'DELETE':
-                r = requests.delete(url, headers=headers, timeout=5)
+                r = session.delete(url, headers=headers, timeout=5)
             else:
                 return None
 
@@ -1655,16 +1746,19 @@ def place_protective_stop(symbol, close_side, position_side, qty, stop_price, pr
 
     return False, None, None, stop_str
 
-def close_binance_futures_position(symbol):
+def close_binance_futures_position(symbol, target_position=None):
     """Emergency closes a specific open position and cancels all remaining orders with idempotent reconciliation."""
-    positions = get_binance_futures_positions()
-    if positions is None:
-        return {'error': 'Position state unavailable; refusing emergency close/order cancellation'}
-    target = None
-    for p in positions:
-        if p['symbol'] == symbol:
-            target = p
-            break
+    if target_position is not None:
+        target = target_position
+    else:
+        positions = get_binance_futures_positions()
+        if positions is None:
+            return {'error': 'Position state unavailable; refusing emergency close/order cancellation'}
+        target = None
+        for p in positions:
+            if p['symbol'] == symbol:
+                target = p
+                break
     if not target:
         cancel_binance_symbol_all_orders(symbol)
         return {'status': 'not_found', 'message': f'No open position found for {symbol}'}
@@ -1746,7 +1840,7 @@ def close_all_binance_futures_positions():
         return [{'error': 'Position state unavailable; refusing close-all'}]
     results = []
     for p in positions:
-        res = close_binance_futures_position(p['symbol'])
+        res = close_binance_futures_position(p['symbol'], target_position=p)
         results.append({'symbol': p['symbol'], 'result': res})
     return results
 
@@ -2339,8 +2433,10 @@ def _save_position_targets():
     """BUG-14 Fix: Persist ACTIVE_POSITION_TARGETS to disk so watchdog restarts recover trailing stop state."""
     try:
         os.makedirs(os.path.dirname(_POSITION_TARGETS_FILE), exist_ok=True)
+        with _ENGINE_LOCK:
+            data = dict(ACTIVE_POSITION_TARGETS)
         with open(_POSITION_TARGETS_FILE, 'w') as f:
-            json.dump(ACTIVE_POSITION_TARGETS, f, indent=2)
+            json.dump(data, f, indent=2)
     except Exception as e:
         print(f"[POSITION TARGETS SAVE WARN] {e}", flush=True)
 
@@ -2357,14 +2453,16 @@ def _load_position_targets():
                     live_syms = set(p['symbol'] for p in live_positions if abs(float(p.get('positionAmt', 0.0))) > 0.0)
                     valid = {sym: data for sym, data in loaded.items() if sym in live_syms}
                     pruned = len(loaded) - len(valid)
-                    ACTIVE_POSITION_TARGETS.update(valid)
+                    with _ENGINE_LOCK:
+                        ACTIVE_POSITION_TARGETS.update(valid)
                     if valid:
                         print(f"[POSITION TARGETS RESTORED] Loaded {len(valid)} active target(s) from disk.", flush=True)
                     if pruned > 0:
                         print(f"[POSITION TARGETS PRUNED] Removed {pruned} stale target(s) for closed positions.", flush=True)
                     _save_position_targets()  # Write back pruned version
                 except TradingStateUnavailable:
-                    ACTIVE_POSITION_TARGETS.update(loaded)
+                    with _ENGINE_LOCK:
+                        ACTIVE_POSITION_TARGETS.update(loaded)
                     print(f"[POSITION TARGETS RESTORED] Binance offline on boot; safely preserved {len(loaded)} target(s) from disk.", flush=True)
     except Exception as e:
         print(f"[POSITION TARGETS LOAD WARN] {e}", flush=True)
@@ -2586,26 +2684,27 @@ def place_binance_futures_tp_sl(symbol, side, last_price, atr, leverage=75, tota
         print(f"🚨 [UNVERIFIED STOP WARN] #{symbol} {side}: Protective stop order ID could not be confirmed on Binance!", flush=True)
 
     # Record targets for Scale-Out / Dynamic Trailing Runner Daemon
-    ACTIVE_POSITION_TARGETS[symbol] = {
-        'side': side.upper(),
-        'entry_price': last_price,
-        'tp1': float(tp1_str),
-        'tp2': float(tp2_str) if not is_quick_scalp else 0.0,
-        'tp2_order_id': tp2_order_id,
-        'sl': float(sl_str),
-        'current_sl': float(sl_str),
-        'sl_order_id': sl_order_id,
-        'initial_qty': float(total_qty),
-        'tp1_qty': float(tp1_qty),
-        'atr': float(atr) if (atr and atr > 0) else float(last_price * 0.008),
-        'is_quick_scalp': bool(is_quick_scalp),
-        'channel': channel,
-        'tp1_hit': False,
-        'tp2_hit': False,
-        'highest_mark': last_price,
-        'lowest_mark': last_price,
-        'trailing_active': False
-    }
+    with _ENGINE_LOCK:
+        ACTIVE_POSITION_TARGETS[symbol] = {
+            'side': side.upper(),
+            'entry_price': last_price,
+            'tp1': float(tp1_str),
+            'tp2': float(tp2_str) if not is_quick_scalp else 0.0,
+            'tp2_order_id': tp2_order_id,
+            'sl': float(sl_str),
+            'current_sl': float(sl_str),
+            'sl_order_id': sl_order_id,
+            'initial_qty': float(total_qty),
+            'tp1_qty': float(tp1_qty),
+            'atr': float(atr) if (atr and atr > 0) else float(last_price * 0.008),
+            'is_quick_scalp': bool(is_quick_scalp),
+            'channel': channel,
+            'tp1_hit': False,
+            'tp2_hit': False,
+            'highest_mark': last_price,
+            'lowest_mark': last_price,
+            'trailing_active': False
+        }
 
     scale_desc = f"{'60%' if is_quick_scalp else '33%'} Scale-Out ({tp1_qty_str} Qty)" if (tp1_qty < total_qty) else f"100% Size ({total_qty} Qty)"
     tp2_desc = f" | TP2 (exchange-side): ${tp2_str}" if tp2_order_id else ""
@@ -2729,22 +2828,25 @@ def manage_active_positions_breakeven(positions=None):
         live_syms = set(p['symbol'] for p in positions if abs(float(p.get('positionAmt', 0.0))) > 0.0)
 
         # BUG-5 Fix: Clean up closed symbols and send Telegram alert
-        for sym in list(ACTIVE_POSITION_TARGETS.keys()):
-            if sym not in live_syms:
+        with _ENGINE_LOCK:
+            closed_syms = [sym for sym in list(ACTIVE_POSITION_TARGETS.keys()) if sym not in live_syms]
+            for sym in closed_syms:
                 closed_target = ACTIVE_POSITION_TARGETS.pop(sym, None)
                 _save_position_targets()  # BUG-14: Persist cleanup to disk
                 if closed_target:
+                    c_channel = closed_target.get('channel', 'FIBONACCI')
+                    record_closed_position_channel(sym, c_channel)
                     c_side = closed_target.get('side', 'UNKNOWN')
                     c_entry = closed_target.get('entry_price', 0.0)
                     c_sl = closed_target.get('current_sl', 0.0)
                     c_tp1_hit = closed_target.get('tp1_hit', False)
                     c_mode = "⚡ Quick Scalp" if closed_target.get('is_quick_scalp') else "🌊 Swing Trade"
                     c_status = "🎯 <b>POSITION CLOSED (TP/Exit Complete)</b>" if c_tp1_hit else "⛔ <b>SL HIT / POSITION CLOSED</b>"
-                    print(f"[POSITION CLOSED] #{sym} ({c_side} | {c_mode}) closed. Entry: ${c_entry:,.4f}, Last SL: ${c_sl:,.4f}. Alerting Telegram.", flush=True)
+                    print(f"[POSITION CLOSED] #{sym} ({c_side} | {c_mode} | Ch: {c_channel}) closed. Entry: ${c_entry:,.4f}, Last SL: ${c_sl:,.4f}. Alerting Telegram.", flush=True)
                     try:
                         send_telegram_msg(
                             f"{c_status}\n\n"
-                            f"• Asset: <b>#{sym}</b> ({c_side} | {c_mode})\n"
+                            f"• Asset: <b>#{sym}</b> ({c_side} | {c_mode} | Ch: {c_channel})\n"
                             f"• Entry: <b>${c_entry:,.4f}</b>\n"
                             f"• Final Stop: <b>${c_sl:,.4f}</b>\n"
                             f"• Scaled TP1: {'✅ Yes' if c_tp1_hit else '❌ No'}\n\n"
@@ -2896,7 +2998,7 @@ def manage_active_positions_breakeven(positions=None):
                             target['sl_order_id'] = new_order_id
                             target['current_sl'] = tight_sl
                         else:
-                            target['current_sl'] = tight_sl
+                            print(f"[STOP TIGHTEN WARN] #{sym} stop replacement failed on Binance; retaining current stop ${target.get('current_sl')}.", flush=True)
 
                     print(f"🎯🎯 [TP2 33% SCALED OUT] #{sym} reached TP2! Major profit locked! Trailing stop tightened! 🚀", flush=True)
                     send_telegram_msg(f"🎯🎯 <b>STAGE 2: TP2 SCALED OUT (66% TOTAL PROFIT LOCKED)</b>\n\n• Asset: <b>#{sym}</b> ({side})\n• Mark Price: <b>${mark_p:,.4f}</b>\n\n<i>🏃 Final 34% TP3 Runner trailing stop tightened to ride trend!</i>")
@@ -3933,8 +4035,9 @@ class WeatherEnsembleBot:
             'trade_mode': "🌊 TREND RUNNER (With-Macro Continuation)",
             'of_desc': of_desc if 'of_desc' in locals() else 'Delta Confirmed'
         }
-        self.ledger.append(entry)
-        self.latest_model_states[symbol] = entry
+        with _ENGINE_LOCK:
+            self.ledger.append(entry)
+            self.latest_model_states[symbol] = entry
 
         if entry['is_trade'] and self.last_notified_bars.get(symbol) != timestamp:
             self.last_notified_bars[symbol] = timestamp
@@ -4018,9 +4121,11 @@ class WeatherEnsembleBot:
             session = get_telegram_session()
 
             def is_authorized(sender_id, chat_id):
-                if not TELEGRAM_CHAT_ID or not str(TELEGRAM_CHAT_ID).strip():
-                    return True  # If no filter specified, allow all authenticated users
-                allowed = [s.strip() for s in str(TELEGRAM_CHAT_ID).split(',') if s.strip()]
+                configured = (os.getenv('TELEGRAM_CHAT_ID') or TELEGRAM_CHAT_ID or '').strip().strip('"').strip("'")
+                if not configured:
+                    print(f"[TELEGRAM C2 SECURITY] Blocked command from user {sender_id} / chat {chat_id}: TELEGRAM_CHAT_ID is not configured in .env (Fail Closed).", flush=True)
+                    return False
+                allowed = [s.strip() for s in configured.split(',') if s.strip()]
                 return str(sender_id) in allowed or str(chat_id) in allowed
 
             while True:
@@ -4311,8 +4416,9 @@ class WeatherEnsembleBot:
                     send_telegram_msg("✨ <b>No orphaned orders found.</b> All open orders match active positions!", reply_markup=get_telegram_inline_keyboard(self.live_trading), chat_id=chat_id)
 
             elif cmd in ['/closeall', '/panic']:
-                results = close_all_binance_futures_positions()
-                cleanup_orphaned_orders()
+                with _ENGINE_LOCK:
+                    results = close_all_binance_futures_positions()
+                    cleanup_orphaned_orders()
                 send_telegram_msg(f"🛑 <b>Emergency Close All executed!</b> Closed {len(results)} positions.", reply_markup=get_telegram_inline_keyboard(self.live_trading), chat_id=chat_id)
 
             elif cmd in ['/leverage', '/lev']:
@@ -4396,7 +4502,8 @@ class WeatherEnsembleBot:
                 else:
                     curr_status = "ENABLED 🟢" if getattr(self, 'scalp_cap_enabled', True) else "DISABLED ⚪ (Unified Pool)"
                     curr_slots = getattr(self, 'max_scalp_slots', None) or max(2, int(self.max_active_positions * 0.6))
-                    scalp_cnt = sum(1 for s, t in ACTIVE_POSITION_TARGETS.items() if t.get('is_quick_scalp'))
+                    with _ENGINE_LOCK:
+                        scalp_cnt = sum(1 for s, t in list(ACTIVE_POSITION_TARGETS.items()) if t.get('is_quick_scalp'))
                     msg = (
                         f"⚡ <b>QUICK SCALP SLOT STATUS</b>\n\n"
                         f"• <b>Slot Cap:</b> {curr_status}\n"
@@ -4421,8 +4528,10 @@ class WeatherEnsembleBot:
                     send_telegram_msg(f"ℹ️ Current Directional Exposure Cap: <b>{self.max_directional_cap} same-side positions</b>\nUsage: <code>/dircap 4</code>", reply_markup=get_telegram_inline_keyboard(self.live_trading), chat_id=chat_id)
 
             elif cmd in ['/models', '/matrix', '/consensus']:
+                with _ENGINE_LOCK:
+                    items = list(self.latest_model_states.items())
                 lines = ["<b>31-MODEL REAL-TIME CONSENSUS MATRIX</b>\n"]
-                for sym, data in self.latest_model_states.items():
+                for sym, data in items:
                     emoji = "🟢 BUY" if data['action'] == 'BUY' else "🔴 SELL" if data['action'] == 'SELL' else "⚪ Hold"
                     lines.append(f"• <b>{sym}</b>: ${data['price']:,.4f} | <b>{data['consensus']}/31</b> ({data['bull']}B/{data['bear']}B) | {emoji}")
                 send_telegram_msg("\n".join(lines), reply_markup=get_telegram_inline_keyboard(self.live_trading), chat_id=chat_id)
@@ -4508,6 +4617,11 @@ class WeatherEnsembleBot:
                 if time.time() - _LAST_PERIODIC_IP_CHECK > 60:
                     _LAST_PERIODIC_IP_CHECK = time.time()
                     check_binance_ip_whitelist(probe_api=False)
+
+                # Periodic server time sync (hourly) to prevent clock drift (-1021)
+                global _LAST_SERVER_TIME_SYNC
+                if time.time() - _LAST_SERVER_TIME_SYNC > 3600:
+                    sync_server_time()
 
                 # 0. Refresh Global API Cache (Fetches all funding rates and BTC 15m in 2 calls)
                 GLOBAL_CACHE.update(force=True)
